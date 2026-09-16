@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Workout Crew</title>
+
+  <!-- "Add to Home Screen" on iPhone: opens full-screen like a real app -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Workouts">
+  <meta name="theme-color" content="#111111">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    }
+  </style>
+</head>
+<body>
+  <!-- GUI goes here. Until then, test the backend from the browser console:
+         await api.signup({ email, password, displayName: 'Sam', groupCode: 'your-code' })
+         await api.logWorkout({ performedOn: api.today(), type: 'run', durationMin: 30 })
+         (await api.feed()).workouts
+         await api.stats() -->
+  <div id="app"><p id="status">Loading…</p></div>
+
+  <script type="module">
+    import api from './js/api.js';
+
+    const status = document.getElementById('status');
+    api.onSessionChange(({ user, member }) => {
+      if (!user) status.textContent = 'Backend connected. Not logged in. (GUI coming soon)';
+      else if (!member) status.textContent = `Logged in as ${user.email}, not in the crew yet.`;
+      else status.textContent = `Logged in as ${member.displayName}. (GUI coming soon)`;
+    });
+
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+  </script>
+</body>
+</html>
