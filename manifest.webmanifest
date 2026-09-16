@@ -1,11 +1,11 @@
 {
-  "name": "Workout Crew",
-  "short_name": "Workouts",
+  "name": "BrothersAndArms",
+  "short_name": "Grind",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
+  "background_color": "#f2ede3",
+  "theme_color": "#f2ede3",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

@@ -1,10 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#111"/>
-  <g fill="#f5c542">
-    <rect x="96" y="176" width="48" height="160" rx="12"/>
-    <rect x="368" y="176" width="48" height="160" rx="12"/>
-    <rect x="56" y="208" width="40" height="96" rx="10"/>
-    <rect x="416" y="208" width="40" height="96" rx="10"/>
-    <rect x="144" y="236" width="224" height="40" rx="8"/>
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#5a3a1e"/>
+      <stop offset="60%" stop-color="#2e1c10"/>
+      <stop offset="100%" stop-color="#120b06"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="228" fill="none" stroke="#D4AF37" stroke-width="10"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="#D4AF37" stroke-width="3"/>
+  <text x="256" y="288" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="900" font-size="140" fill="#E9C767" letter-spacing="6">STJ</text>
+  <g fill="#D4AF37">
+    <rect x="176" y="350" width="160" height="14" rx="7"/>
+    <rect x="160" y="330" width="20" height="54" rx="6"/>
+    <rect x="332" y="330" width="20" height="54" rx="6"/>
+    <rect x="146" y="338" width="14" height="38" rx="5"/>
+    <rect x="352" y="338" width="14" height="38" rx="5"/>
   </g>
 </svg>

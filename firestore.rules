@@ -127,5 +127,21 @@ service cloud.firestore {
       allow update: if isMember() && (validOwnerEdit() || validKudosChange());
       allow delete: if isMember() && resource.data.userId == request.auth.uid;
     }
+
+    // ---------- crew chat (one shared channel, permanent history) ----------
+    function validMessage(d) {
+      return d.keys().hasOnly(['userId', 'displayName', 'text', 'createdAt'])
+        && d.keys().hasAll(['userId', 'displayName', 'text', 'createdAt'])
+        && d.userId == request.auth.uid
+        && validName(d.displayName)
+        && d.text is string && d.text.size() >= 1 && d.text.size() <= 2000
+        && d.createdAt == request.time;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isMember();
+      allow create: if isMember() && validMessage(request.resource.data);
+      allow update, delete: if false;
+    }
   }
 }

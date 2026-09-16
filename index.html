@@ -3,45 +3,616 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Workout Crew</title>
+  <title>BrothersAndArms</title>
 
   <!-- "Add to Home Screen" on iPhone: opens full-screen like a real app -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Workouts">
-  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-title" content="Grind">
+  <meta name="theme-color" content="#f2ede3">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
 
   <style>
+    :root {
+      --bg: #f2ede3;
+      --ink: #17140f;
+      --muted: #86806f;
+      --line: #d9d2bf;
+      --card: #f8f5ee;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, system-ui, sans-serif;
-      background: #111;
-      color: #eee;
-      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+      font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+      background: var(--bg);
+      color: var(--ink);
+      padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px);
+    }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    a, button { font-family: inherit; }
+    .caps { text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ---- auth screens ---- */
+    .auth-card { max-width: 360px; margin: 64px auto; }
+    .auth-card h1 { font-size: 1.1rem; text-align: center; margin-bottom: 24px; }
+    form { display: flex; flex-direction: column; gap: 10px; }
+    label { font-size: 0.78rem; color: var(--muted); }
+    input, textarea {
+      width: 100%;
+      font-family: inherit;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      font-size: 0.95rem;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    button {
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: var(--bg);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.link {
+      background: none;
+      border: none;
+      color: var(--ink);
+      text-decoration: underline;
+      padding: 4px 0;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+    .error { color: #a43b3b; font-size: 0.82rem; min-height: 1.2em; }
+    .msg { color: #3b6b47; font-size: 0.82rem; min-height: 1.2em; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    /* ---- dashboard header ---- */
+    header.app-header {
+      display: flex; align-items: flex-start;
+      flex-wrap: wrap; gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 16px; margin-bottom: 20px;
+    }
+    .brand { font-weight: 800; font-size: 1.15rem; letter-spacing: 0.1em; }
+    .tagline { font-size: 0.7rem; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+    .center-date { text-align: center; flex: 1; min-width: 220px; }
+    .date-line { font-size: 0.85rem; letter-spacing: 0.08em; }
+    .day-line { font-size: 0.7rem; color: var(--muted); margin: 2px 0 6px; letter-spacing: 0.08em; }
+    .clock { font-size: 2.2rem; font-weight: 800; }
+    .clock .ampm { font-size: 1rem; margin-left: 4px; }
+    .tagline-right { text-align: right; font-size: 0.7rem; color: var(--muted); line-height: 1.5; }
+
+    /* ---- check-in card ---- */
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+      background: var(--card);
+    }
+    .card h2 { font-size: 1rem; letter-spacing: 0.08em; margin: 0 0 16px; }
+    .step-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.06em; }
+    .group-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .group-btn {
+      flex: 1 1 100px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      padding: 10px 6px;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .group-btn.selected { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+    .routine-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+    .routine-card {
+      flex: 1 1 260px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 14px;
+      cursor: pointer;
+    }
+    .routine-card.selected { border: 2px solid var(--ink); padding: 13px; }
+    .routine-card .head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 8px; font-size: 0.85rem; }
+    .radio-dot {
+      width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ink);
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+    }
+    .radio-dot.filled::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+    .routine-card ul { margin: 0; padding-left: 0; list-style: none; color: var(--muted); font-size: 0.82rem; line-height: 1.7; }
+
+    .bottom-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+    .notes-col { flex: 2 1 260px; display: flex; flex-direction: column; gap: 8px; }
+    .duration-col { display: flex; flex-direction: column; gap: 8px; }
+    .duration-inputs { display: flex; align-items: center; gap: 6px; }
+    .duration-inputs input { width: 60px; text-align: center; }
+    .duration-labels { display: flex; gap: 24px; font-size: 0.65rem; color: var(--muted); justify-content: center; }
+    .log-btn { flex: 1 1 160px; align-self: stretch; }
+
+    /* ---- today's check-ins ---- */
+    .feed-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .feed-head h2 { margin: 0; }
+    .feed-count { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.05em; }
+    .feed-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+    .feed-row:first-of-type { border-top: none; }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 0.72rem; font-weight: 700;
+    }
+    .feed-name { font-weight: 700; min-width: 70px; }
+    .feed-meta { color: var(--muted); font-size: 0.8rem; min-width: 90px; }
+    .feed-notes { flex: 1 1 160px; font-size: 0.85rem; }
+    .feed-time { color: var(--muted); font-size: 0.78rem; margin-left: auto; white-space: nowrap; }
+    .empty { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
+
+    /* ---- crew chat ---- */
+    .chat-messages {
+      max-height: 360px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+    .chat-body { flex: 1; }
+    .chat-head { display: flex; gap: 8px; align-items: baseline; }
+    .chat-name { font-weight: 700; font-size: 0.82rem; }
+    .chat-time { color: var(--muted); font-size: 0.7rem; }
+    .chat-text { font-size: 0.88rem; margin-top: 2px; overflow-wrap: anywhere; }
+    .chat-form { display: flex; gap: 8px; }
+    .chat-form input { flex: 1; }
+    .chat-form button { flex: none; width: auto; padding: 10px 18px; }
+
+    footer.app-footer {
+      display: flex; justify-content: space-between;
+      font-size: 0.68rem; color: var(--muted); letter-spacing: 0.06em;
+      margin-top: 8px;
     }
   </style>
 </head>
 <body>
-  <!-- GUI goes here. Until then, test the backend from the browser console:
-         await api.signup({ email, password, displayName: 'Sam', groupCode: 'your-code' })
-         await api.logWorkout({ performedOn: api.today(), type: 'run', durationMin: 30 })
-         (await api.feed()).workouts
-         await api.stats() -->
-  <div id="app"><p id="status">Loading…</p></div>
+  <div class="wrap" id="app"><p>Loading…</p></div>
 
   <script type="module">
     import api from './js/api.js';
+    import { MUSCLE_GROUPS, ROUTINES, typeFor, parseType } from './js/routines.js';
 
-    const status = document.getElementById('status');
-    api.onSessionChange(({ user, member }) => {
-      if (!user) status.textContent = 'Backend connected. Not logged in. (GUI coming soon)';
-      else if (!member) status.textContent = `Logged in as ${user.email}, not in the crew yet.`;
-      else status.textContent = `Logged in as ${member.displayName}. (GUI coming soon)`;
-    });
+    const app = document.getElementById('app');
+    let mode = 'login'; // 'login' | 'signup'
+    let cleanup = [];   // active listeners/timers for the currently rendered view
+
+    function teardown() {
+      cleanup.forEach((fn) => fn());
+      cleanup = [];
+    }
+
+    function render(session) {
+      teardown();
+      const { user, member } = session;
+      if (!user) return renderAuthForm();
+      if (!member) return renderJoinForm(user);
+      return renderDashboard(member);
+    }
+
+    // ---------------------------------------------------------------------
+    // Auth screens
+    // ---------------------------------------------------------------------
+    function renderAuthForm() {
+      const isSignup = mode === 'signup';
+      app.innerHTML = `
+        <div class="auth-card">
+          <h1 class="caps">BrothersAndArms</h1>
+          <form id="auth-form">
+            <label class="caps">Email</label>
+            <input type="email" name="email" autocomplete="email" required>
+            <label class="caps">Password</label>
+            <input type="password" name="password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" required minlength="6">
+            ${isSignup ? `
+              <label class="caps">Your name</label>
+              <input type="text" name="displayName" required maxlength="40">
+              <label class="caps">Invite code</label>
+              <input type="text" name="groupCode" required>
+            ` : ''}
+            <p class="error" id="error"></p>
+            <button type="submit" class="caps">${isSignup ? 'Sign up' : 'Log in'}</button>
+          </form>
+          <div class="row" style="margin-top: 14px;">
+            <button class="link" id="toggle-mode">${isSignup ? 'Already have an account? Log in' : "New here? Sign up"}</button>
+            ${isSignup ? '' : '<button class="link" id="forgot">Forgot password?</button>'}
+          </div>
+        </div>
+      `;
+
+      const form = document.getElementById('auth-form');
+      const errorEl = document.getElementById('error');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.className = 'error';
+        errorEl.textContent = '';
+        const data = Object.fromEntries(new FormData(form));
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          if (isSignup) await api.signup(data);
+          else await api.login(data.email, data.password);
+        } catch (err) {
+          errorEl.textContent = err.message;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      document.getElementById('toggle-mode').addEventListener('click', () => {
+        mode = isSignup ? 'login' : 'signup';
+        renderAuthForm();
+      });
+
+      const forgotBtn = document.getElementById('forgot');
+      if (forgotBtn) {
+        forgotBtn.addEventListener('click', async () => {
+          const email = form.email.value;
+          if (!email) { errorEl.className = 'error'; errorEl.textContent = 'Enter your email above first.'; return; }
+          try {
+            await api.resetPassword(email);
+            errorEl.className = 'msg';
+            errorEl.textContent = 'Password reset email sent.';
+          } catch (err) {
+            errorEl.className = 'error';
+            errorEl.textContent = err.message;
+          }
+        });
+      }
+    }
+
+    function renderJoinForm(user) {
+      app.innerHTML = `
+        <div class="auth-card">
+          <h1 class="caps">BrothersAndArms</h1>
+          <p style="font-size: 0.85rem; color: var(--muted);">Logged in as ${escapeHtml(user.email)}. Enter your invite code to join the crew.</p>
+          <form id="join-form">
+            <label class="caps">Your name</label>
+            <input type="text" name="displayName" required maxlength="40">
+            <label class="caps">Invite code</label>
+            <input type="text" name="groupCode" required>
+            <p class="error" id="error"></p>
+            <button type="submit" class="caps">Join crew</button>
+          </form>
+          <div class="row" style="margin-top: 14px;">
+            <button class="link" id="signout">Log out</button>
+          </div>
+        </div>
+      `;
+      const form = document.getElementById('join-form');
+      const errorEl = document.getElementById('error');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.textContent = '';
+        const data = Object.fromEntries(new FormData(form));
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          await api.joinCrew(data);
+        } catch (err) {
+          errorEl.textContent = err.message;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+      document.getElementById('signout').addEventListener('click', () => api.logout());
+    }
+
+    // ---------------------------------------------------------------------
+    // Dashboard
+    // ---------------------------------------------------------------------
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    const AVATAR_COLORS = ['#3f6f5f', '#5b6b8c', '#8a7a4b', '#8c5b5b', '#4b6b8a', '#6b5b8c'];
+    function avatarColor(id) {
+      let h = 0;
+      for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      return AVATAR_COLORS[h % AVATAR_COLORS.length];
+    }
+    function initials(name) {
+      const tokens = String(name || '?').trim().split(/\s+/);
+      if (tokens.length >= 2) return (tokens[0][0] + tokens[tokens.length - 1][0]).toUpperCase();
+      return name.slice(0, 2).toUpperCase();
+    }
+    function formatDuration(min) {
+      if (!min) return '—';
+      const h = Math.floor(min / 60), m = min % 60;
+      return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+    }
+    function dayOfYear(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const start = Date.UTC(y, 0, 1);
+      const cur = Date.UTC(y, m - 1, d);
+      const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+      return { day: Math.round((cur - start) / 86400000) + 1, total: isLeap ? 366 : 365 };
+    }
+
+    function renderDashboard(member) {
+      const state = { groupId: null, routineKey: 'a' };
+
+      app.innerHTML = `
+        <header class="app-header">
+          <div>
+            <div class="brand">BROTHERSANDARMS</div>
+            <div class="tagline">3 FRIENDS. 5 DAYS A WEEK.<br>NO EXCUSES.</div>
+          </div>
+          <div class="center-date">
+            <div class="date-line caps" id="date-line"></div>
+            <div class="day-line caps" id="day-line"></div>
+            <div class="clock" id="clock"></div>
+          </div>
+        </header>
+
+        <div class="card">
+          <div class="row" style="margin-bottom: 16px;">
+            <h2 class="caps">Check in</h2>
+            <button class="link" id="signout">Log out (${escapeHtml(member.displayName)})</button>
+          </div>
+
+          <div class="step-label caps">1. What are you training today?</div>
+          <div class="group-row" id="group-row"></div>
+
+          <div id="routine-section"></div>
+
+          <div class="bottom-row">
+            <div class="notes-col">
+              <div class="step-label caps">3. Add notes (optional)</div>
+              <textarea id="notes" placeholder="How did it go? PRs? Anything to note?" maxlength="1000"></textarea>
+            </div>
+            <div class="duration-col">
+              <div class="step-label caps">4. Workout duration</div>
+              <div class="duration-inputs">
+                <input type="number" id="hours" min="0" max="24" value="0">
+                <span>:</span>
+                <input type="number" id="minutes" min="0" max="59" value="0">
+              </div>
+              <div class="duration-labels caps"><span>Hours</span><span>Minutes</span></div>
+            </div>
+            <button class="log-btn caps" id="log-btn">Log workout</button>
+          </div>
+          <p class="error" id="log-error"></p>
+        </div>
+
+        <div class="card">
+          <div class="feed-head">
+            <h2 class="caps">Today's check-ins</h2>
+            <div class="feed-count caps" id="feed-count"></div>
+          </div>
+          <div id="feed-list"><p class="empty">Loading…</p></div>
+        </div>
+
+        <div class="card">
+          <h2 class="caps">Crew chat</h2>
+          <div class="chat-messages" id="chat-messages"><p class="empty">Loading…</p></div>
+          <form id="chat-form" class="chat-form">
+            <input type="text" id="chat-input" placeholder="Message the crew..." maxlength="2000" required>
+            <button type="submit" class="caps">Send</button>
+          </form>
+          <p class="error" id="chat-error"></p>
+        </div>
+
+        <footer class="app-footer caps">
+          <span>BrothersAndArms</span>
+        </footer>
+      `;
+
+      document.getElementById('signout').addEventListener('click', () => api.logout());
+
+      // ---- clock / date ----
+      function tick() {
+        const now = new Date();
+        document.getElementById('date-line').textContent =
+          now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const { day, total } = dayOfYear(api.today());
+        document.getElementById('day-line').textContent = `Day ${day} of ${total}`;
+        const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const [h, ampm] = time.split(' ');
+        document.getElementById('clock').innerHTML = `${h}<span class="ampm">${ampm || ''}</span>`;
+      }
+      tick();
+      const clockTimer = setInterval(tick, 1000);
+      cleanup.push(() => clearInterval(clockTimer));
+
+      // ---- check-in form ----
+      const groupRow = document.getElementById('group-row');
+      MUSCLE_GROUPS.forEach((g) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'group-btn caps';
+        btn.textContent = g.label;
+        btn.addEventListener('click', () => {
+          state.groupId = g.id;
+          state.routineKey = 'a';
+          renderGroupSelection();
+          renderRoutineSection();
+        });
+        btn.dataset.groupId = g.id;
+        groupRow.appendChild(btn);
+      });
+
+      function renderGroupSelection() {
+        [...groupRow.children].forEach((btn) => {
+          btn.classList.toggle('selected', btn.dataset.groupId === state.groupId);
+        });
+      }
+
+      function renderRoutineSection() {
+        const section = document.getElementById('routine-section');
+        const routines = ROUTINES[state.groupId];
+        if (!state.groupId || state.groupId === 'rest' || !routines) {
+          section.innerHTML = '';
+          return;
+        }
+        section.innerHTML = `
+          <div class="step-label caps">2. Which routine?</div>
+          <div class="routine-row">
+            ${['a', 'b'].map((key) => `
+              <div class="routine-card ${state.routineKey === key ? 'selected' : ''}" data-key="${key}">
+                <div class="head">
+                  <span class="radio-dot ${state.routineKey === key ? 'filled' : ''}"></span>
+                  <span class="caps">Routine ${key.toUpperCase()}</span>
+                </div>
+                <ul>${routines[key].map((ex) => `<li>${ex}</li>`).join('')}</ul>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        section.querySelectorAll('.routine-card').forEach((card) => {
+          card.addEventListener('click', () => {
+            state.routineKey = card.dataset.key;
+            renderRoutineSection();
+          });
+        });
+      }
+
+      const logError = document.getElementById('log-error');
+      document.getElementById('log-btn').addEventListener('click', async () => {
+        logError.textContent = '';
+        if (!state.groupId) { logError.textContent = 'Pick what you\'re training today.'; return; }
+        const hours = Number(document.getElementById('hours').value) || 0;
+        const minutes = Number(document.getElementById('minutes').value) || 0;
+        const notes = document.getElementById('notes').value;
+        const isRest = state.groupId === 'rest';
+        const type = isRest ? 'rest' : typeFor(state.groupId, state.routineKey);
+        const exercises = isRest ? [] : (ROUTINES[state.groupId]?.[state.routineKey] || []).map((name) => ({ name }));
+
+        const btn = document.getElementById('log-btn');
+        btn.disabled = true;
+        try {
+          await api.logWorkout({
+            performedOn: api.today(),
+            type,
+            durationMin: hours * 60 + minutes,
+            notes,
+            exercises,
+          });
+          document.getElementById('notes').value = '';
+          document.getElementById('hours').value = 0;
+          document.getElementById('minutes').value = 0;
+        } catch (err) {
+          logError.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      // ---- today's check-ins (live) ----
+      let members = [];
+      let todaysWorkouts = [];
+
+      function renderFeed() {
+        const byId = Object.fromEntries(members.map((m) => [m.id, m]));
+        const list = document.getElementById('feed-list');
+        const countEl = document.getElementById('feed-count');
+        const checkedInIds = new Set(todaysWorkouts.map((w) => w.userId));
+        countEl.textContent = `${checkedInIds.size} / ${members.length} checked in`;
+
+        if (!todaysWorkouts.length) {
+          list.innerHTML = '<p class="empty">No check-ins yet today.</p>';
+          return;
+        }
+        list.innerHTML = todaysWorkouts.map((w) => {
+          const person = byId[w.userId];
+          const name = person ? person.displayName : 'Someone';
+          const { groupLabel, routineLabel } = parseType(w.type);
+          const time = w.createdAt
+            ? w.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+            : '';
+          return `
+            <div class="feed-row">
+              <div class="avatar" style="background:${avatarColor(w.userId)}">${escapeHtml(initials(name))}</div>
+              <div class="feed-name">${escapeHtml(name)}</div>
+              <div class="feed-meta">${escapeHtml(groupLabel)}</div>
+              <div class="feed-meta">${escapeHtml(routineLabel || '')}</div>
+              <div class="feed-meta">${formatDuration(w.durationMin)}</div>
+              <div class="feed-notes">${escapeHtml(w.notes || '')}</div>
+              <div class="feed-time">${escapeHtml(time)}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const unwatchMembers = api.watchMembers((m) => { members = m; renderFeed(); });
+      const unwatchFeed = api.watchFeed((workouts) => {
+        const today = api.today();
+        todaysWorkouts = workouts.filter((w) => w.performedOn === today);
+        renderFeed();
+      }, { pageSize: 50 });
+      cleanup.push(unwatchMembers, unwatchFeed);
+
+      // ---- crew chat (live, full history) ----
+      const chatList = document.getElementById('chat-messages');
+      const chatForm = document.getElementById('chat-form');
+      const chatInput = document.getElementById('chat-input');
+      const chatError = document.getElementById('chat-error');
+
+      const unwatchChat = api.watchChat((messages) => {
+        const wasAtBottom = chatList.scrollTop + chatList.clientHeight >= chatList.scrollHeight - 20;
+        if (!messages.length) {
+          chatList.innerHTML = '<p class="empty">No messages yet. Say hi.</p>';
+          return;
+        }
+        chatList.innerHTML = messages.map((m) => {
+          const time = m.createdAt
+            ? m.createdAt.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+            : 'sending…';
+          return `
+            <div class="chat-msg">
+              <div class="avatar" style="background:${avatarColor(m.userId)}">${escapeHtml(initials(m.displayName))}</div>
+              <div class="chat-body">
+                <div class="chat-head">
+                  <span class="chat-name">${escapeHtml(m.displayName)}</span>
+                  <span class="chat-time">${escapeHtml(time)}</span>
+                </div>
+                <div class="chat-text">${escapeHtml(m.text)}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+        if (wasAtBottom) chatList.scrollTop = chatList.scrollHeight;
+      }, (err) => { chatError.textContent = err.message; });
+      chatList.scrollTop = chatList.scrollHeight;
+      cleanup.push(unwatchChat);
+
+      chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        chatError.textContent = '';
+        const text = chatInput.value;
+        if (!text.trim()) return;
+        const btn = chatForm.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        try {
+          await api.sendMessage(text);
+          chatInput.value = '';
+          chatList.scrollTop = chatList.scrollHeight;
+        } catch (err) {
+          chatError.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    api.onSessionChange(render);
 
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
   </script>

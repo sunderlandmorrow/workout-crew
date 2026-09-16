@@ -28,6 +28,7 @@ const db = initializeFirestore(app, {
 
 const membersCol = collection(db, 'members');
 const workoutsCol = collection(db, 'workouts');
+const messagesCol = collection(db, 'messages');
 const STREAK_HISTORY_DAYS = 90; // streaks longer than this show as 90
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,18 @@ function requireUser() {
 function toMember(snap) {
   const d = snap.data();
   return { id: snap.id, displayName: d.displayName, joinedAt: d.joinedAt?.toDate() ?? null };
+}
+
+function toMessage(snap) {
+  const d = snap.data();
+  return {
+    id: snap.id,
+    userId: d.userId,
+    displayName: d.displayName,
+    text: d.text,
+    createdAt: d.createdAt?.toDate() ?? null,
+    pending: snap.metadata.hasPendingWrites,
+  };
 }
 
 function toWorkout(snap) {
@@ -275,6 +288,29 @@ export const api = {
     const user = requireUser();
     await updateDoc(doc(workoutsCol, id), { kudos: arrayRemove(user.uid) });
   }),
+
+  // ---- chat ----
+
+  /** One shared, permanent channel for the whole crew. */
+  sendMessage: wrap(async (text) => {
+    const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
+    const msg = v.chatMessage(text);
+    await addDoc(messagesCol, {
+      userId: user.uid,
+      displayName: member.displayName,
+      text: msg,
+      createdAt: serverTimestamp(),
+    });
+  }),
+
+  /** Live, full-history chat feed (oldest first). Returns an unsubscribe function. */
+  watchChat(callback, onError) {
+    return onSnapshot(query(messagesCol, orderBy('createdAt', 'asc'), limit(1000)),
+      (snap) => callback(snap.docs.map(toMessage)),
+      (err) => onError?.(friendly(err)));
+  },
 
   // ---- leaderboard ----
 

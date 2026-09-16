@@ -20,7 +20,7 @@ Firebase      ──  Authentication (email + password)
 
 | File | What it is |
 |---|---|
-| `firestore.rules` | The backend logic. Only people with the invite code can join; you can only edit your own workouts; anyone in the crew can give kudos. |
+| `firestore.rules` | The backend logic. Only people with the invite code can join; you can only edit your own workouts; anyone in the crew can give kudos; anyone in the crew can read/post to the shared chat. |
 | `firestore.indexes.json` | One database index the "filter feed by person" query needs. |
 | `js/api.js` | Data layer. The GUI calls this and never touches Firebase directly. |
 | `js/firebase-config.js` | Your project's Firebase keys (you paste these in). |
@@ -152,6 +152,10 @@ A workout looks like:
 ```
 
 **Kudos**: `kudos(id)`, `unkudos(id)`
+
+**Chat**: one shared channel, permanent history.
+- `sendMessage(text)`
+- `watchChat(callback, onError?)` → cb gets `[{ id, userId, displayName, text, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
 
 **Leaderboard**: `stats(days = 7)` →
 ```js

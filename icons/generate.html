@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Icon Generator</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; padding: 24px; }
+  .row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  canvas { background: #222; border: 1px solid #444; }
+  a.dl { background: #D4AF37; color: #111; padding: 8px 14px; border-radius: 6px; text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<h2>Workout Crew — icon export</h2>
+<p>Click each gold button to download that size, then move the downloaded file into your project's <code>icons/</code> folder, replacing the old one.</p>
+<div id="output"></div>
+
+<script>
+const svgMarkup = `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#5a3a1e"/>
+      <stop offset="60%" stop-color="#2e1c10"/>
+      <stop offset="100%" stop-color="#120b06"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="228" fill="none" stroke="#D4AF37" stroke-width="10"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="#D4AF37" stroke-width="3"/>
+  <text x="256" y="288" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="900" font-size="140" fill="#E9C767" letter-spacing="6">STJ</text>
+  <g fill="#D4AF37">
+    <rect x="176" y="350" width="160" height="14" rx="7"/>
+    <rect x="160" y="330" width="20" height="54" rx="6"/>
+    <rect x="332" y="330" width="20" height="54" rx="6"/>
+    <rect x="146" y="338" width="14" height="38" rx="5"/>
+    <rect x="352" y="338" width="14" height="38" rx="5"/>
+  </g>
+</svg>`;
+
+const targets = [
+  { name: 'apple-touch-icon.png', size: 180 },
+  { name: 'icon-192.png', size: 192 },
+  { name: 'icon-512.png', size: 512 }
+];
+
+const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
+const url = URL.createObjectURL(blob);
+const img = new Image();
+img.onload = () => {
+  const output = document.getElementById('output');
+  targets.forEach(t => {
+    const canvas = document.createElement('canvas');
+    canvas.width = t.size;
+    canvas.height = t.size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, t.size, t.size);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    canvas.style.width = '100px';
+    canvas.style.height = '100px';
+    row.appendChild(canvas);
+
+    const label = document.createElement('span');
+    label.textContent = `${t.name} (${t.size}x${t.size})`;
+    row.appendChild(label);
+
+    const link = document.createElement('a');
+    link.className = 'dl';
+    link.textContent = 'Download';
+    link.download = t.name;
+    canvas.toBlob(b => { link.href = URL.createObjectURL(b); }, 'image/png');
+    row.appendChild(link);
+
+    output.appendChild(row);
+  });
+};
+img.src = url;
+</script>
+</body>
+</html>

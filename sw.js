@@ -2,11 +2,11 @@
 // and works offline. Firebase traffic (other domains) is left alone; Firestore
 // has its own offline cache.
 // Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'v1';
+const VERSION = 'v3';
 const CACHE = `workout-crew-${VERSION}`;
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
-  'js/api.js', 'js/firebase-config.js', 'js/validate.js', 'js/stats.js',
+  'js/api.js', 'js/firebase-config.js', 'js/validate.js', 'js/stats.js', 'js/routines.js',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
 

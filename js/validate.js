@@ -18,6 +18,14 @@ export function displayName(v) {
   return s;
 }
 
+export function chatMessage(v) {
+  if (typeof v !== 'string') throw bad('Message cannot be empty');
+  const s = v.trim();
+  if (s.length < 1) throw bad('Message cannot be empty');
+  if (s.length > 2000) throw bad('Message must be at most 2000 characters');
+  return s;
+}
+
 export function inviteCode(v) {
   const s = typeof v === 'string' ? v.trim() : '';
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(s)) throw bad('Wrong group code');
