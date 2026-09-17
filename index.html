@@ -497,6 +497,7 @@
 
         <div class="tabs">
           <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
+          <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
           <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
           <button class="tab-btn caps" id="tab-btn-weight">Weight</button>
         </div>
@@ -541,7 +542,9 @@
             </div>
             <div id="feed-list"><p class="empty">Loading…</p></div>
           </div>
+        </div>
 
+        <div id="tab-chat" style="display:none;">
           <div class="card card-chat">
             <h2 class="caps">Crew chat</h2>
             <div class="chat-messages" id="chat-messages"><p class="empty">Loading…</p></div>
@@ -632,6 +635,7 @@
 
       const tabs = {
         checkin: { panel: document.getElementById('tab-checkin'), btn: document.getElementById('tab-btn-checkin') },
+        chat: { panel: document.getElementById('tab-chat'), btn: document.getElementById('tab-btn-chat') },
         calendar: { panel: document.getElementById('tab-calendar'), btn: document.getElementById('tab-btn-calendar') },
         weight: { panel: document.getElementById('tab-weight'), btn: document.getElementById('tab-btn-weight') },
       };
@@ -642,8 +646,10 @@
         });
         if (name === 'calendar') loadCalendarMonth();
         if (name === 'weight') loadWeightTab();
+        if (name === 'chat') chatList.scrollTop = chatList.scrollHeight;
       }
       tabs.checkin.btn.addEventListener('click', () => showTab('checkin'));
+      tabs.chat.btn.addEventListener('click', () => showTab('chat'));
       tabs.calendar.btn.addEventListener('click', () => showTab('calendar'));
       tabs.weight.btn.addEventListener('click', () => showTab('weight'));
 
