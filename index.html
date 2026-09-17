@@ -145,6 +145,13 @@
     .duration-inputs { display: flex; align-items: center; gap: 6px; }
     .duration-inputs input { width: 60px; text-align: center; }
     .duration-labels { display: flex; gap: 24px; font-size: 0.65rem; color: var(--muted); justify-content: center; }
+    .rating-col { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
+    .rating-inputs { display: flex; align-items: center; gap: 10px; }
+    .rating-inputs input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+    .rating-value { font-size: 0.85rem; font-weight: 700; min-width: 70px; text-align: right; }
     .log-btn { flex: 1 1 160px; align-self: stretch; }
 
     /* ---- tabs ---- */
@@ -515,6 +522,13 @@
                 </div>
                 <div class="duration-labels caps"><span>Hours</span><span>Minutes</span></div>
               </div>
+              <div class="rating-col">
+                <div class="step-label caps">4. How did it feel?</div>
+                <div class="rating-inputs">
+                  <input type="range" id="rating" min="1" max="5" step="1" value="3">
+                  <span class="rating-value" id="rating-value"></span>
+                </div>
+              </div>
               <button class="log-btn caps" id="log-btn">Log workout</button>
             </div>
             <p class="error" id="log-error"></p>
@@ -675,6 +689,15 @@
         });
       }
 
+      const RATING_LABELS = ['Rough', 'Tough', 'OK', 'Good', 'Crushed it'];
+      const ratingInput = document.getElementById('rating');
+      const ratingValue = document.getElementById('rating-value');
+      function renderRatingValue() {
+        ratingValue.textContent = `${ratingInput.value} — ${RATING_LABELS[Number(ratingInput.value) - 1]}`;
+      }
+      ratingInput.addEventListener('input', renderRatingValue);
+      renderRatingValue();
+
       const logError = document.getElementById('log-error');
       document.getElementById('log-btn').addEventListener('click', async () => {
         logError.textContent = '';
@@ -692,6 +715,7 @@
             type,
             durationMin: hours * 60 + minutes,
             notes,
+            rating: Number(ratingInput.value),
             exercises: [],
           });
           selectedTags.clear();
@@ -699,6 +723,8 @@
           document.getElementById('notes').value = '';
           document.getElementById('hours').value = 0;
           document.getElementById('minutes').value = 0;
+          ratingInput.value = 3;
+          renderRatingValue();
         } catch (err) {
           logError.textContent = err.message;
         } finally {
@@ -761,6 +787,7 @@
               <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
               <div class="feed-meta">${escapeHtml(label)}</div>
               <div class="feed-meta">${formatDuration(w.durationMin)}</div>
+              <div class="feed-meta">${w.rating ? '★'.repeat(w.rating) + '☆'.repeat(5 - w.rating) : ''}</div>
               <div class="feed-notes">${escapeHtml(w.notes || '')}</div>
               <div class="feed-time">${escapeHtml(time)}</div>
             </div>

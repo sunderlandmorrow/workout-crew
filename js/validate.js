@@ -98,6 +98,7 @@ export function workout(input, { partial = false } = {}) {
     out.durationMin = optNumber(input.durationMin, 'Minutes', { min: 0, max: 1440, integer: true });
   }
   if (!partial || has('notes')) out.notes = optText(input.notes, 'Notes', 1000);
+  if (!partial || has('rating')) out.rating = optNumber(input.rating, 'Rating', { min: 1, max: 5, integer: true });
   if (!partial || has('exercises')) out.exercises = exercises(input.exercises);
   return out;
 }

@@ -76,8 +76,12 @@ service cloud.firestore {
       return x == null || (x is string && x.size() <= 1000);
     }
 
+    function validRating(x) {
+      return x == null || (x is int && x >= 1 && x <= 5);
+    }
+
     function validWorkout(d) {
-      let allowed = ['userId', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
+      let allowed = ['userId', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
       let required = ['userId', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
       return d.keys().hasOnly(allowed)
         && d.keys().hasAll(required)
@@ -91,6 +95,7 @@ service cloud.firestore {
         && d.type.size() <= 40
         && validDuration(d.get('durationMin', null))
         && validNotes(d.get('notes', null))
+        && validRating(d.get('rating', null))
         && d.exercises is list
         && d.exercises.size() <= 50
         && d.kudos is list
@@ -109,7 +114,7 @@ service cloud.firestore {
     // The owner edits their own workout's details.
     function validOwnerEdit() {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      let editable = ['performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'exercises', 'updatedAt'];
+      let editable = ['performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'updatedAt'];
       return resource.data.userId == request.auth.uid
         && changed.hasOnly(editable)
         && validWorkout(request.resource.data);

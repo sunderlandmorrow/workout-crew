@@ -63,12 +63,15 @@ test('leaderboard', () => {
 
 test('workout validation', () => {
   const w = v.workout({
-    performedOn: '2026-09-15', type: '  Lift ', durationMin: '45.4', notes: '  leg day ',
+    performedOn: '2026-09-15', type: '  Lift ', durationMin: '45.4', notes: '  leg day ', rating: '4',
     exercises: [{ name: 'Squat', sets: 5, reps: 5, weight: 225, unit: 'lb' }],
   });
   assert.equal(w.type, 'lift');
   assert.equal(w.durationMin, 45); // rounded: rules require an integer
   assert.equal(w.notes, 'leg day');
+  assert.equal(w.rating, 4);
+  assert.equal(v.workout({ performedOn: '2026-09-15', type: 'run' }).rating, null);
+  assert.throws(() => v.workout({ performedOn: '2026-09-15', type: 'run', rating: 6 }), /Rating/);
   assert.deepEqual(w.exercises[0], {
     name: 'Squat', sets: 5, reps: 5, weight: 225, unit: 'lb', distanceKm: null, durationMin: null,
   });

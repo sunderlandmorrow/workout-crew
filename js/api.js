@@ -116,6 +116,7 @@ function toWorkout(snap) {
     type: d.type,
     durationMin: d.durationMin ?? null,
     notes: d.notes ?? null,
+    rating: d.rating ?? null,
     exercises: d.exercises ?? [],
     kudos,
     kudosCount: kudos.length,
@@ -254,7 +255,7 @@ export const api = {
 
   // ---- workouts ----
 
-  /** input: { performedOn, type, durationMin?, notes?, exercises? }
+  /** input: { performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? }
    *  exercises: [{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }] */
   logWorkout: wrap(async (input) => {
     const user = requireUser();
@@ -275,7 +276,7 @@ export const api = {
     return snap.exists() ? toWorkout(snap) : null;
   }),
 
-  /** Change any of: performedOn, type, durationMin, notes, exercises. Own workouts only. */
+  /** Change any of: performedOn, type, durationMin, notes, rating, exercises. Own workouts only. */
   updateWorkout: wrap(async (id, fields) => {
     const changes = v.workout(fields, { partial: true });
     const ref = doc(workoutsCol, id);
