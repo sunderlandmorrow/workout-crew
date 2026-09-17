@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Workout Crew Storage rules. Paste into Firebase console -> Storage -> Rules -> Publish.
+// Requires the Blaze plan (Cloud Storage isn't available on Spark for new projects).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // You're in the crew once you have a members/{yourUid} document in Firestore.
+    function isMember() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid));
+    }
+
+    // Chat photos: only the uploader can write to their own folder, images only, 8MB cap.
+    match /chatImages/{uid}/{fileName} {
+      allow read: if isMember();
+      allow write: if isMember()
+        && request.auth.uid == uid
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
+    // Monthly progress photos: same shape as chat photos.
+    match /progressPhotos/{uid}/{fileName} {
+      allow read: if isMember();
+      allow write: if isMember()
+        && request.auth.uid == uid
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+  }
+}

@@ -129,18 +129,47 @@ service cloud.firestore {
     }
 
     // ---------- crew chat (one shared channel, permanent history) ----------
+    function validImageUrl(d) {
+      return !('imageUrl' in d) || (
+        d.imageUrl is string && d.imageUrl.size() <= 500
+        && d.imageUrl.matches('^https://firebasestorage[.]googleapis[.]com/.*')
+      );
+    }
+
     function validMessage(d) {
-      return d.keys().hasOnly(['userId', 'displayName', 'text', 'createdAt'])
+      return d.keys().hasOnly(['userId', 'displayName', 'text', 'imageUrl', 'createdAt'])
         && d.keys().hasAll(['userId', 'displayName', 'text', 'createdAt'])
         && d.userId == request.auth.uid
         && validName(d.displayName)
-        && d.text is string && d.text.size() >= 1 && d.text.size() <= 2000
+        && d.text is string && d.text.size() <= 2000
+        && (d.text.size() >= 1 || 'imageUrl' in d)
+        && validImageUrl(d)
         && d.createdAt == request.time;
     }
 
     match /messages/{messageId} {
       allow read: if isMember();
       allow create: if isMember() && validMessage(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // ---------- monthly weigh-ins (one per person per month, doc id = uid_YYYY-MM) ----------
+    function validWeight(d) {
+      return d.keys().hasOnly(['userId', 'month', 'weight', 'photoUrl', 'createdAt'])
+        && d.keys().hasAll(['userId', 'month', 'weight', 'photoUrl', 'createdAt'])
+        && d.userId == request.auth.uid
+        && d.month is string && d.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && d.weight is number && d.weight > 0 && d.weight <= 1000
+        && d.photoUrl is string && d.photoUrl.size() <= 500
+        && d.photoUrl.matches('^https://firebasestorage[.]googleapis[.]com/.*')
+        && d.createdAt == request.time;
+    }
+
+    match /weights/{weightId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && validWeight(request.resource.data)
+        && weightId == request.resource.data.userId + '_' + request.resource.data.month;
       allow update, delete: if false;
     }
   }

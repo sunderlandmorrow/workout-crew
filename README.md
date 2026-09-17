@@ -22,6 +22,7 @@ Firebase      ──  Authentication (email + password)
 |---|---|
 | `firestore.rules` | The backend logic. Only people with the invite code can join; you can only edit your own workouts; anyone in the crew can give kudos; anyone in the crew can read/post to the shared chat. |
 | `firestore.indexes.json` | One database index the "filter feed by person" query needs. |
+| `storage.rules` | Backend logic for chat photos. Requires the Blaze plan (Cloud Storage isn't available on Spark for new projects) -- see setup step 3b. |
 | `js/api.js` | Data layer. The GUI calls this and never touches Firebase directly. |
 | `js/firebase-config.js` | Your project's Firebase keys (you paste these in). |
 | `js/stats.js`, `js/validate.js` | Leaderboard/streak math and input checks. |
@@ -57,6 +58,19 @@ Firebase      ──  Authentication (email + password)
 
    (If you skip this, the "one person's workouts" filter will fail with an error
    that contains a link to create it, so you can also just click that.)
+
+### 3b. (Optional) Turn on chat photos
+
+Sharing photos in the crew chat needs Firebase Storage, which requires the **Blaze**
+plan -- Google no longer offers Storage on Spark for new projects. Blaze has no base
+fee; you're only billed past the same free quotas Spark gives everywhere else (5GB
+stored, 1GB/day downloaded). For a small crew this should stay at $0. Skip this step
+if you don't want a card on file -- everything else in the app works fine without it.
+
+1. **⚙️ Project settings → Usage and billing → Details & settings → Modify plan** → choose **Blaze** and add a payment method.
+   (Optional but recommended: set a budget alert, e.g. "notify me at $1", under Google Cloud Console → Billing → Budgets & alerts.)
+2. **Build → Storage → Get started**, choose a location, keep the default bucket.
+3. Open the **Rules** tab, replace everything with the contents of `storage.rules`, and click **Publish**.
 
 ### 4. Create your group's invite code
 
@@ -155,7 +169,14 @@ A workout looks like:
 
 **Chat**: one shared channel, permanent history.
 - `sendMessage(text)`
-- `watchChat(callback, onError?)` → cb gets `[{ id, userId, displayName, text, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
+- `sendPhoto(file, caption?)` → uploads to Firebase Storage (images only, 8MB max), posts with the caption. Requires the Blaze plan + `storage.rules` published.
+- `watchChat(callback, onError?)` → cb gets `[{ id, userId, displayName, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
+
+**Monthly weigh-in**: one entry per person per calendar month, can't be changed once logged.
+- `currentMonth()` → `'YYYY-MM'`
+- `logWeight(weight)` (lb)
+- `myWeightThisMonth()` → `{ id, userId, month, weight, createdAt }` or `null`
+- `watchWeights(callback, onError?)` → cb gets every weigh-in ever logged, newest month first. Returns an unsubscribe function.
 
 **Leaderboard**: `stats(days = 7)` →
 ```js

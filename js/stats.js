@@ -11,6 +11,10 @@ export function localToday(now = new Date()) {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+export function localMonth(now = new Date()) {
+  return localToday(now).slice(0, 7); // 'YYYY-MM'
+}
+
 // Workout ordering key: date first, then creation time, so plain string sorting
 // gives newest-first order and date-range queries work on one field.
 export function makeSortKey(performedOn, createdIso = new Date().toISOString()) {

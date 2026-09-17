@@ -18,6 +18,12 @@ export function displayName(v) {
   return s;
 }
 
+export function bodyWeight(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0 || n > 1000) throw bad('Enter a valid weight (in lb)');
+  return Math.round(n * 10) / 10;
+}
+
 export function chatMessage(v) {
   if (typeof v !== 'string') throw bad('Message cannot be empty');
   const s = v.trim();

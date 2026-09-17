@@ -14,10 +14,13 @@ import {
   query, where, orderBy, limit, startAfter, onSnapshot,
   serverTimestamp, arrayUnion, arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {
+  getStorage, ref as storageRef, uploadBytes, getDownloadURL,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 
 import { firebaseConfig } from './firebase-config.js';
 import * as v from './validate.js';
-import { addDays, localToday, makeSortKey, buildLeaderboard } from './stats.js';
+import { addDays, localToday, localMonth, makeSortKey, buildLeaderboard } from './stats.js';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -25,10 +28,12 @@ const auth = getAuth(app);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+const storage = getStorage(app);
 
 const membersCol = collection(db, 'members');
 const workoutsCol = collection(db, 'workouts');
 const messagesCol = collection(db, 'messages');
+const weightsCol = collection(db, 'weights');
 const STREAK_HISTORY_DAYS = 90; // streaks longer than this show as 90
 
 // ---------------------------------------------------------------------------
@@ -45,6 +50,9 @@ const FRIENDLY = {
   'auth/network-request-failed': 'No connection. Check your internet.',
   'permission-denied': "You don't have permission to do that.",
   'unavailable': 'Offline right now. Changes will sync when you reconnect.',
+  'storage/unauthorized': "You don't have permission to upload that.",
+  'storage/canceled': 'Upload canceled.',
+  'storage/quota-exceeded': 'Storage is full for now. Try again later.',
 };
 function friendly(err) {
   if (err instanceof v.ValidationError) return err;
@@ -78,8 +86,21 @@ function toMessage(snap) {
     userId: d.userId,
     displayName: d.displayName,
     text: d.text,
+    imageUrl: d.imageUrl ?? null,
     createdAt: d.createdAt?.toDate() ?? null,
     pending: snap.metadata.hasPendingWrites,
+  };
+}
+
+function toWeight(snap) {
+  const d = snap.data();
+  return {
+    id: snap.id,
+    userId: d.userId,
+    month: d.month,
+    weight: d.weight,
+    photoUrl: d.photoUrl,
+    createdAt: d.createdAt?.toDate() ?? null,
   };
 }
 
@@ -305,10 +326,69 @@ export const api = {
     });
   }),
 
+  /** Share a photo, with an optional caption, to the crew chat. Max 8MB, images only. */
+  sendPhoto: wrap(async (file, caption = '') => {
+    const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
+    if (!file.type.startsWith('image/')) throw new v.ValidationError('Only images can be shared');
+    if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Image must be under 8MB');
+    const path = `chatImages/${user.uid}/${Date.now()}_${file.name}`;
+    const sref = storageRef(storage, path);
+    await uploadBytes(sref, file);
+    const imageUrl = await getDownloadURL(sref);
+    await addDoc(messagesCol, {
+      userId: user.uid,
+      displayName: member.displayName,
+      text: String(caption || '').trim().slice(0, 2000),
+      imageUrl,
+      createdAt: serverTimestamp(),
+    });
+  }),
+
   /** Live, full-history chat feed (oldest first). Returns an unsubscribe function. */
   watchChat(callback, onError) {
     return onSnapshot(query(messagesCol, orderBy('createdAt', 'asc'), limit(1000)),
       (snap) => callback(snap.docs.map(toMessage)),
+      (err) => onError?.(friendly(err)));
+  },
+
+  // ---- monthly weigh-in ----
+
+  currentMonth: localMonth,
+
+  /** One weigh-in per person per calendar month; can't be changed once logged.
+   *  A progress photo is required alongside the weight. */
+  logWeight: wrap(async (weight, photoFile) => {
+    const user = requireUser();
+    const w = v.bodyWeight(weight);
+    if (!photoFile) throw new v.ValidationError('Add a progress photo with your weigh-in');
+    if (!photoFile.type.startsWith('image/')) throw new v.ValidationError('Only images can be uploaded');
+    if (photoFile.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
+    const month = localMonth();
+    const sref = storageRef(storage, `progressPhotos/${user.uid}/${month}_${Date.now()}`);
+    await uploadBytes(sref, photoFile);
+    const photoUrl = await getDownloadURL(sref);
+    try {
+      await setDoc(doc(weightsCol, `${user.uid}_${month}`), {
+        userId: user.uid, month, weight: w, photoUrl, createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      if (err.code === 'permission-denied') throw new Error("You've already logged your weight this month");
+      throw err;
+    }
+  }),
+
+  myWeightThisMonth: wrap(async () => {
+    const user = requireUser();
+    const snap = await getDoc(doc(weightsCol, `${user.uid}_${localMonth()}`));
+    return snap.exists() ? toWeight(snap) : null;
+  }),
+
+  /** Live list of every weigh-in ever logged, newest month first. */
+  watchWeights(callback, onError) {
+    return onSnapshot(query(weightsCol, orderBy('month', 'desc')),
+      (snap) => callback(snap.docs.map(toWeight)),
       (err) => onError?.(friendly(err)));
   },
 
