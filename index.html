@@ -75,6 +75,23 @@
     .msg { color: #3b6b47; font-size: 0.82rem; min-height: 1.2em; }
     .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+    .profile-row { display: flex; align-items: center; gap: 12px; }
+    .profile-avatar-btn {
+      position: relative;
+      width: 40px; height: 40px; border-radius: 50%;
+      border: none; padding: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 0.8rem; font-weight: 700;
+      overflow: hidden;
+    }
+    .profile-avatar-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .profile-avatar-badge {
+      position: absolute; bottom: -2px; right: -2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--ink); border: 2px solid var(--bg);
+      font-size: 0.55rem; display: flex; align-items: center; justify-content: center;
+    }
+
     /* ---- dashboard header ---- */
     header.app-header {
       display: flex; justify-content: space-between; align-items: flex-start;
@@ -146,7 +163,9 @@
       width: 34px; height: 34px; border-radius: 50%; flex: none;
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-size: 0.72rem; font-weight: 700;
+      overflow: hidden;
     }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .feed-name { font-weight: 700; min-width: 70px; }
     .feed-meta { color: var(--muted); font-size: 0.8rem; min-width: 90px; }
     .feed-notes { flex: 1 1 160px; font-size: 0.85rem; }
@@ -451,7 +470,15 @@
         </header>
 
         <div class="row" style="margin-bottom: 16px;">
-          <div>Logged in as <strong>${escapeHtml(member.displayName)}</strong> <span class="points" id="my-points"></span></div>
+          <div class="profile-row">
+            <button type="button" class="profile-avatar-btn" id="profile-avatar-btn" title="Change profile photo" style="background:${avatarColor(member.displayName)}">
+              <span id="profile-avatar-placeholder" style="${member.avatarUrl ? 'display:none;' : ''}">${escapeHtml(initials(member.displayName))}</span>
+              <img id="profile-avatar-img" src="${member.avatarUrl ? escapeHtml(member.avatarUrl) : ''}" style="${member.avatarUrl ? '' : 'display:none;'}" alt="Your profile photo">
+              <span class="profile-avatar-badge">📷</span>
+            </button>
+            <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
+            <div>Logged in as <strong>${escapeHtml(member.displayName)}</strong> <span class="points" id="my-points"></span></div>
+          </div>
           <button class="link" id="signout">Log out</button>
         </div>
 
@@ -560,6 +587,28 @@
       `;
 
       document.getElementById('signout').addEventListener('click', () => api.logout());
+
+      const avatarBtn = document.getElementById('profile-avatar-btn');
+      const avatarInput = document.getElementById('profile-avatar-input');
+      const avatarImg = document.getElementById('profile-avatar-img');
+      const avatarPlaceholder = document.getElementById('profile-avatar-placeholder');
+      avatarBtn.addEventListener('click', () => avatarInput.click());
+      avatarInput.addEventListener('change', async () => {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        avatarBtn.disabled = true;
+        try {
+          avatarImg.src = URL.createObjectURL(file);
+          avatarImg.style.display = '';
+          avatarPlaceholder.style.display = 'none';
+          await api.setAvatar(file);
+        } catch (err) {
+          window.alert(err.message);
+        } finally {
+          avatarBtn.disabled = false;
+          avatarInput.value = '';
+        }
+      });
 
       const tabs = {
         checkin: { panel: document.getElementById('tab-checkin'), btn: document.getElementById('tab-btn-checkin') },
@@ -673,6 +722,15 @@
       let members = [];
       let todaysWorkouts = [];
 
+      function avatarHtml(name, userId) {
+        const person = members.find((m) => m.id === userId);
+        const bg = avatarColor(name);
+        if (person && person.avatarUrl) {
+          return `<div class="avatar" style="background:${bg}"><img src="${escapeHtml(person.avatarUrl)}" alt="${escapeHtml(name)}"></div>`;
+        }
+        return `<div class="avatar" style="background:${bg}">${escapeHtml(initials(name))}</div>`;
+      }
+
       function renderFeed() {
         const byId = Object.fromEntries(members.map((m) => [m.id, m]));
         const list = document.getElementById('feed-list');
@@ -693,7 +751,7 @@
             : '';
           return `
             <div class="feed-row">
-              <div class="avatar" style="background:${avatarColor(name)}">${escapeHtml(initials(name))}</div>
+              ${avatarHtml(name, w.userId)}
               <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
               <div class="feed-meta">${escapeHtml(label)}</div>
               <div class="feed-meta">${formatDuration(w.durationMin)}</div>
@@ -732,7 +790,7 @@
             : 'sending…';
           return `
             <div class="chat-msg">
-              <div class="avatar" style="background:${avatarColor(m.displayName)}">${escapeHtml(initials(m.displayName))}</div>
+              ${avatarHtml(m.displayName, m.userId)}
               <div class="chat-body">
                 <div class="chat-head">
                   <span class="chat-name">${nameWithPoints(m.displayName, m.userId)}</span>

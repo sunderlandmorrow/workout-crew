@@ -31,5 +31,15 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow delete: if false;
     }
+
+    // Profile pictures: one file per person, replaceable any time.
+    match /avatars/{uid}/{fileName} {
+      allow read: if isMember();
+      allow write: if isMember()
+        && request.auth.uid == uid
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isMember() && request.auth.uid == uid;
+    }
   }
 }

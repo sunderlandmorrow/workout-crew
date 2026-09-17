@@ -76,7 +76,7 @@ function requireUser() {
 // ---------------------------------------------------------------------------
 function toMember(snap) {
   const d = snap.data();
-  return { id: snap.id, displayName: d.displayName, joinedAt: d.joinedAt?.toDate() ?? null };
+  return { id: snap.id, displayName: d.displayName, avatarUrl: d.avatarUrl ?? null, joinedAt: d.joinedAt?.toDate() ?? null };
 }
 
 function toMessage(snap) {
@@ -223,6 +223,20 @@ export const api = {
   rename: wrap(async (displayName) => {
     const user = requireUser();
     await updateDoc(doc(membersCol, user.uid), { displayName: v.displayName(displayName) });
+    return api.me();
+  }),
+
+  /** Set or replace your profile picture. Images only, 8MB max. */
+  setAvatar: wrap(async (file) => {
+    const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
+    if (!file.type.startsWith('image/')) throw new v.ValidationError('Only images can be uploaded');
+    if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
+    const sref = storageRef(storage, `avatars/${user.uid}/photo`);
+    await uploadBytes(sref, file, { contentType: file.type });
+    const avatarUrl = await getDownloadURL(sref);
+    await updateDoc(doc(membersCol, user.uid), { avatarUrl });
     return api.me();
   }),
 

@@ -45,18 +45,25 @@ service cloud.firestore {
         && d.joinedAt == request.time;
     }
 
-    function validRename(uid) {
+    function validAvatarUrl(u) {
+      return u is string && u.size() <= 500
+        && u.matches('^https://firebasestorage[.]googleapis[.]com/.*');
+    }
+
+    function validProfileUpdate(uid) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let d = request.resource.data;
       return signedIn()
         && request.auth.uid == uid
-        && changed.hasOnly(['displayName'])
-        && validName(request.resource.data.displayName);
+        && changed.hasOnly(['displayName', 'avatarUrl'])
+        && (!changed.hasAny(['displayName']) || validName(d.displayName))
+        && (!changed.hasAny(['avatarUrl']) || validAvatarUrl(d.avatarUrl));
     }
 
     match /members/{uid} {
       allow read: if isMember() || (signedIn() && request.auth.uid == uid);
       allow create: if validNewMember(uid);
-      allow update: if validRename(uid);
+      allow update: if validProfileUpdate(uid);
       allow delete: if false;
     }
 

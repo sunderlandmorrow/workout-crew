@@ -146,9 +146,10 @@ Every function throws an `Error` with a message that's safe to show on screen.
 - `logout()`, `resetPassword(email)`, `currentUserId()`
 
 **Members**
-- `me()` → `{ id, displayName, email, joinedAt }`
+- `me()` → `{ id, displayName, avatarUrl, email, joinedAt }`
 - `rename(displayName)`
-- `members()` / `watchMembers(cb)` → `[{ id, displayName, joinedAt }]`
+- `setAvatar(file)` → uploads to Firebase Storage (images only, 8MB max), sets it as your profile picture. Requires the Blaze plan + `storage.rules` published.
+- `members()` / `watchMembers(cb)` → `[{ id, displayName, avatarUrl, joinedAt }]`
 
 **Workouts**
 - `logWorkout({ performedOn, type, durationMin?, notes?, exercises? })` → workout
