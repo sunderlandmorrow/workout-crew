@@ -17,24 +17,28 @@
 
   <style>
     :root {
-      --bg: #f2ede3;
-      --ink: #17140f;
-      --muted: #86806f;
-      --line: #d9d2bf;
-      --card: #f8f5ee;
+      --bg: #efe3d0;
+      --ink: #221d15;
+      --muted: #8a7c66;
+      --line: #ddccae;
+      --card: #f7ecd9;
+      --card-feed: #f1e2c4;
+      --card-chat: #eee0c3;
+      --card-calendar: #f4e7cc;
+      --card-weight: #f0dfbe;
       --accent: #d1372c;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--ink);
       padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px);
     }
     .wrap { max-width: 960px; margin: 0 auto; }
     a, button { font-family: inherit; }
-    .caps { text-transform: uppercase; letter-spacing: 0.08em; }
+    .caps { text-transform: uppercase; letter-spacing: 0.04em; }
 
     /* ---- auth screens ---- */
     .auth-card { max-width: 360px; margin: 64px auto; }
@@ -94,17 +98,16 @@
 
     /* ---- dashboard header ---- */
     header.app-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      flex-wrap: wrap; gap: 12px;
+      display: flex; justify-content: center; align-items: center;
+      flex-wrap: wrap; gap: 32px;
       border-bottom: 1px solid var(--line);
       padding-bottom: 16px; margin-bottom: 20px;
+      text-align: center;
     }
-    .brand { font-weight: 800; font-size: 1.15rem; letter-spacing: 0.1em; }
-    .center-date { text-align: center; flex: 1; min-width: 220px; }
-    .date-line { font-size: 0.85rem; letter-spacing: 0.08em; margin-bottom: 6px; }
-    .clock { font-size: 2.2rem; font-weight: 800; }
-    .clock .ampm { font-size: 1rem; margin-left: 4px; }
-    .countdown { text-align: right; }
+    .brand { font-weight: 800; font-size: 1.15rem; letter-spacing: 0.08em; }
+    .center-date { min-width: 200px; }
+    .clock { font-size: 1.6rem; font-weight: 700; letter-spacing: 0.02em; }
+    .clock .ampm { font-size: 0.95rem; margin-left: 2px; }
     .countdown-label { font-size: 0.68rem; color: var(--muted); }
     .countdown-num { font-size: 2rem; font-weight: 800; color: var(--accent); line-height: 1.1; }
 
@@ -116,6 +119,10 @@
       margin-bottom: 20px;
       background: var(--card);
     }
+    .card-feed { background: var(--card-feed); }
+    .card-chat { background: var(--card-chat); }
+    .card-calendar { background: var(--card-calendar); }
+    .card-weight { background: var(--card-weight); }
     .card h2 { font-size: 1rem; letter-spacing: 0.08em; margin: 0 0 16px; }
     .step-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.06em; }
     .group-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
@@ -459,7 +466,6 @@
             <div class="brand">BROTHERSANDARMS</div>
           </div>
           <div class="center-date">
-            <div class="date-line caps" id="date-line"></div>
             <div class="clock" id="clock"></div>
           </div>
           <div class="countdown">
@@ -489,7 +495,7 @@
         </div>
 
         <div id="tab-checkin">
-          <div class="card">
+          <div class="card card-checkin">
             <h2 class="caps">Check in</h2>
 
             <div class="step-label caps">1. What did you hit today?</div>
@@ -514,7 +520,7 @@
             <p class="error" id="log-error"></p>
           </div>
 
-          <div class="card">
+          <div class="card card-feed">
             <div class="feed-head">
               <h2 class="caps">Today's check-ins</h2>
               <div class="feed-count caps" id="feed-count"></div>
@@ -522,7 +528,7 @@
             <div id="feed-list"><p class="empty">Loading…</p></div>
           </div>
 
-          <div class="card">
+          <div class="card card-chat">
             <h2 class="caps">Crew chat</h2>
             <div class="chat-messages" id="chat-messages"><p class="empty">Loading…</p></div>
             <form id="chat-form" class="chat-form">
@@ -536,7 +542,7 @@
         </div>
 
         <div id="tab-calendar" style="display:none;">
-          <div class="card">
+          <div class="card card-calendar">
             <div class="row" style="margin-bottom: 8px;">
               <button class="link" id="cal-prev">&larr; Prev</button>
               <h2 class="caps" id="cal-title" style="margin:0;"></h2>
@@ -552,7 +558,7 @@
         </div>
 
         <div id="tab-weight" style="display:none;">
-          <div class="card">
+          <div class="card card-weight">
             <h2 class="caps">Monthly weigh-in</h2>
             <div class="weight-status" id="weight-status"></div>
             <form class="weight-form" id="weight-form">
@@ -630,11 +636,11 @@
       // ---- clock / date ----
       function tick() {
         const now = new Date();
-        document.getElementById('date-line').textContent =
-          now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
         const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         const [h, ampm] = time.split(' ');
-        document.getElementById('clock').innerHTML = `${h}<span class="ampm">${ampm || ''}</span>`;
+        document.getElementById('clock').innerHTML =
+          `${h}<span class="ampm">${ampm || ''}</span> on ${dateStr}`;
         document.getElementById('countdown-num').textContent = daysUntil(COMPETITION_DATE, api.today());
       }
       tick();
