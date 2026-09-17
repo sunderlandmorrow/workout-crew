@@ -335,7 +335,7 @@ export const api = {
     if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Image must be under 8MB');
     const path = `chatImages/${user.uid}/${Date.now()}_${file.name}`;
     const sref = storageRef(storage, path);
-    await uploadBytes(sref, file);
+    await uploadBytes(sref, file, { contentType: file.type });
     const imageUrl = await getDownloadURL(sref);
     await addDoc(messagesCol, {
       userId: user.uid,
@@ -367,7 +367,7 @@ export const api = {
     if (photoFile.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
     const month = localMonth();
     const sref = storageRef(storage, `progressPhotos/${user.uid}/${month}_${Date.now()}`);
-    await uploadBytes(sref, photoFile);
+    await uploadBytes(sref, photoFile, { contentType: photoFile.type });
     const photoUrl = await getDownloadURL(sref);
     try {
       await setDoc(doc(weightsCol, `${user.uid}_${month}`), {
