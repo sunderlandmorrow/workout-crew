@@ -81,6 +81,20 @@ if you don't want a card on file -- everything else in the app works fine withou
 Each isolated group needs a `crews` document (its identity) and at least one
 `inviteCodes` document (how people get into it). Do this once per crew.
 
+**Easy way** (needs a service account key -- see the "Migrating" section below
+for how to get one; delete it again afterward, no need to keep it around):
+
+```
+cd scripts
+npm install
+node create-crew.mjs --service-account ./serviceAccountKey.json --crew-id brothersandarms --crew-name "BrothersAndArms" --apply
+```
+
+It prints the invite code to hand out. Run it again with a different `--crew-id`
+any time you want another, completely separate crew.
+
+**Manual way** (no Node needed):
+
 1. Pick a **crewId**: lowercase letters/digits/hyphens only, e.g. `brothersandarms`.
 2. In **Firestore Database → Data**, click **Start collection**.
 3. Collection ID: `crews`. Document ID: your crewId (e.g. `brothersandarms`).
@@ -96,11 +110,10 @@ Each isolated group needs a `crews` document (its identity) and at least one
    that's how the app knows which crew a code leads to.
 8. Add field `crewId` (string) = the same crewId, and save.
 
-Give that code to your friends -- they type it when signing up and land in that
-crew. To stop new sign-ups, delete the `inviteCodes` document. To let a new wave
-of people into the same crew, create another `inviteCodes` document with the same
-`crewId` prefix. To start a **second, completely separate** crew, repeat this whole
-section with a different crewId.
+Either way: give that code to your friends -- they type it as the "Crew ID" when
+signing up and land in that crew. To stop new sign-ups, delete the `inviteCodes`
+document. To let a new wave of people into the same crew, create another
+`inviteCodes` document with the same `crewId` prefix.
 
 ### 5. Connect the website to Firebase
 
