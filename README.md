@@ -218,10 +218,14 @@ out (`crewId` won't exist yet, so every crew-scoped query/rule check fails):
 1. Get a service account key: **Project settings → Service accounts → Generate new private key**.
    Keep it out of git -- `scripts/.gitignore` already excludes `serviceAccountKey*.json`.
 2. `cd scripts && npm install`
-3. **Back it up first:** `node backup-firestore.mjs --service-account ./serviceAccountKey.json`
-   Writes every collection to local JSON under `scripts/backups/<timestamp>/` (also gitignored --
-   it's your friends' real data, never commit it). If anything below goes wrong, restore with
-   `node restore-firestore.mjs --service-account ./serviceAccountKey.json --in ./backups/<timestamp> --apply`.
+3. **Back it up first:** `node backup-all.mjs --service-account ./serviceAccountKey.json`
+   Backs up Firestore data, Storage files (avatars/chat photos/progress photos), and the
+   Authentication account list, all into `scripts/backups/<timestamp>/` (gitignored -- it's
+   your friends' real data, never commit it). If anything below goes wrong, restore Firestore
+   with `node restore-firestore.mjs --service-account ./serviceAccountKey.json --in ./backups/<timestamp> --apply`
+   and/or Storage with `node restore-storage.mjs --service-account ./serviceAccountKey.json --in ./backups/<timestamp>/storage --apply`.
+   (The Auth backup is names/uids only, for reference -- it can't restore anyone's password. See
+   the comment at the top of `backup-auth.mjs` if you want a password-hash-inclusive backup too.)
 4. Dry run the migration: `node migrate-to-crews.mjs --service-account ./serviceAccountKey.json --crew-id brothersandarms --crew-name "BrothersAndArms"`
    Check the counts it prints look right.
 5. Apply it: add `--apply` to the same command. It creates the `crews` doc, mints a
