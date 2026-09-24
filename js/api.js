@@ -82,6 +82,9 @@ function toMember(snap) {
     crewId: d.crewId,
     displayName: d.displayName,
     avatarUrl: d.avatarUrl ?? null,
+    // Optional fixed avatar color, set by hand in the console (e.g. '#e0b400').
+    // Falls back to a generic hash-based color when not set.
+    color: d.color ?? null,
     joinedAt: d.joinedAt?.toDate() ?? null,
   };
 }

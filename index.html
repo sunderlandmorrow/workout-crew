@@ -437,9 +437,12 @@
     }
 
     // Deterministic per-name color, shared by the avatars and the weight chart --
-    // has to be generic (not hardcoded per person) now that any crew can sign up.
+    // generic (not hardcoded per person) since any crew can sign up. A member can
+    // still get a fixed color by setting a `color` field on their profile in the
+    // console (e.g. '#e0b400'); pass it in as the second argument to use it.
     const AVATAR_COLORS = ['#3f6f5f', '#5b6b8c', '#8a7a4b', '#8c5b5b', '#4b6b8a', '#6b5b8c', '#e0b400', '#a8453a'];
-    function avatarColor(name) {
+    function avatarColor(name, color) {
+      if (color) return color;
       let h = 0;
       for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
       return AVATAR_COLORS[h % AVATAR_COLORS.length];
@@ -483,7 +486,7 @@
 
         <div class="row" style="margin-bottom: 16px;">
           <div class="profile-row">
-            <button type="button" class="profile-avatar-btn" id="profile-avatar-btn" title="Change profile photo" style="background:${avatarColor(member.displayName)}">
+            <button type="button" class="profile-avatar-btn" id="profile-avatar-btn" title="Change profile photo" style="background:${avatarColor(member.displayName, member.color)}">
               <span id="profile-avatar-placeholder" style="${member.avatarUrl ? 'display:none;' : ''}">${escapeHtml(initials(member.displayName))}</span>
               <img id="profile-avatar-img" src="${member.avatarUrl ? escapeHtml(member.avatarUrl) : ''}" style="${member.avatarUrl ? '' : 'display:none;'}" alt="Your profile photo">
               <span class="profile-avatar-badge">📷</span>
@@ -763,7 +766,7 @@
 
       function avatarHtml(name, userId) {
         const person = members.find((m) => m.id === userId);
-        const bg = avatarColor(name);
+        const bg = avatarColor(name, person?.color);
         if (person && person.avatarUrl) {
           return `<div class="avatar" style="background:${bg}"><img src="${escapeHtml(person.avatarUrl)}" alt="${escapeHtml(name)}"></div>`;
         }
@@ -933,7 +936,7 @@
           .sort((a, b) => (rawCounts[b.id] || 0) - (rawCounts[a.id] || 0))
           .map((m) => `
             <span class="cal-person">
-              <span class="cal-swatch" style="background:${avatarColor(m.displayName)}"></span>
+              <span class="cal-swatch" style="background:${avatarColor(m.displayName, m.color)}"></span>
               ${escapeHtml(m.displayName)}: ${rawCounts[m.id] || 0}
             </span>
           `).join('');
@@ -945,7 +948,7 @@
           const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
           const dots = [...(byDate[dateStr] || [])].map((id) => {
             const name = byId[id] ? byId[id].displayName : '?';
-            return `<div class="cal-dot" style="background:${avatarColor(name)}">${escapeHtml(firstInitial(name))}</div>`;
+            return `<div class="cal-dot" style="background:${avatarColor(name, byId[id]?.color)}">${escapeHtml(firstInitial(name))}</div>`;
           }).join('');
           cells.push(`
             <div class="cal-cell">
@@ -1039,7 +1042,7 @@
         }).join('');
 
         const linesSvg = members.map((m) => {
-          const color = avatarColor(m.displayName);
+          const color = avatarColor(m.displayName, m.color);
           const pts = months
             .map((mo, i) => (byMonthUser[mo]?.[m.id] != null ? { i, v: byMonthUser[mo][m.id] } : null))
             .filter(Boolean);
@@ -1060,7 +1063,7 @@
             ${gridSvg}${linesSvg}${xLabelsSvg}
           </svg>
           <div class="cal-breakdown">
-            ${members.map((m) => `<span class="cal-person"><span class="cal-swatch" style="background:${avatarColor(m.displayName)}"></span>${escapeHtml(m.displayName)}</span>`).join('')}
+            ${members.map((m) => `<span class="cal-person"><span class="cal-swatch" style="background:${avatarColor(m.displayName, m.color)}"></span>${escapeHtml(m.displayName)}</span>`).join('')}
           </div>
         `;
       }
