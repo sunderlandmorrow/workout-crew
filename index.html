@@ -335,8 +335,8 @@
             ${isSignup ? `
               <label class="caps">Your name</label>
               <input type="text" name="displayName" required maxlength="40">
-              <label class="caps">Invite code</label>
-              <input type="text" name="groupCode" required>
+              <label class="caps">Crew ID</label>
+              <input type="text" name="groupCode" required placeholder="e.g. brothersandarms_X7K2M9">
             ` : ''}
             <p class="error" id="error"></p>
             <button type="submit" class="caps">${isSignup ? 'Sign up' : 'Log in'}</button>
@@ -394,12 +394,12 @@
       app.innerHTML = `
         <div class="auth-card">
           <h1 class="caps">BrothersAndArms</h1>
-          <p style="font-size: 0.85rem; color: var(--muted);">Logged in as ${escapeHtml(user.email)}. Enter your invite code to join the crew.</p>
+          <p style="font-size: 0.85rem; color: var(--muted);">Logged in as ${escapeHtml(user.email)}. Enter your crew ID to join.</p>
           <form id="join-form">
             <label class="caps">Your name</label>
             <input type="text" name="displayName" required maxlength="40">
-            <label class="caps">Invite code</label>
-            <input type="text" name="groupCode" required>
+            <label class="caps">Crew ID</label>
+            <input type="text" name="groupCode" required placeholder="e.g. brothersandarms_X7K2M9">
             <p class="error" id="error"></p>
             <button type="submit" class="caps">Join crew</button>
           </form>
