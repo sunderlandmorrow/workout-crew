@@ -1,0 +1,9 @@
+{
+  "name": "workout-crew-scripts",
+  "private": true,
+  "type": "module",
+  "description": "One-off admin scripts. Not part of the deployed site.",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

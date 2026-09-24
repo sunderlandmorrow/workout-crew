@@ -313,10 +313,10 @@
 
     function render(session) {
       teardown();
-      const { user, member } = session;
+      const { user, member, crew } = session;
       if (!user) return renderAuthForm();
-      if (!member) return renderJoinForm(user);
-      return renderDashboard(member);
+      if (!member || !crew) return renderJoinForm(user);
+      return renderDashboard(member, crew);
     }
 
     // ---------------------------------------------------------------------
@@ -436,11 +436,10 @@
       }[c]));
     }
 
-    const AVATAR_COLORS = ['#3f6f5f', '#5b6b8c', '#8a7a4b', '#8c5b5b', '#4b6b8a', '#6b5b8c'];
-    const PERSON_COLORS = { sonny: '#e0b400', jonny: '#3468a8', tyler: '#111111' };
+    // Deterministic per-name color, shared by the avatars and the weight chart --
+    // has to be generic (not hardcoded per person) now that any crew can sign up.
+    const AVATAR_COLORS = ['#3f6f5f', '#5b6b8c', '#8a7a4b', '#8c5b5b', '#4b6b8a', '#6b5b8c', '#e0b400', '#a8453a'];
     function avatarColor(name) {
-      const first = String(name || '').trim().split(/\s+/)[0]?.toLowerCase();
-      if (first && PERSON_COLORS[first]) return PERSON_COLORS[first];
       let h = 0;
       for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
       return AVATAR_COLORS[h % AVATAR_COLORS.length];
@@ -455,8 +454,6 @@
       const h = Math.floor(min / 60), m = min % 60;
       return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
     }
-    // Bodybuilding competition: fixed at 2 years out from the day this was set up.
-    const COMPETITION_DATE = '2028-09-16';
     function daysUntil(dateStr, todayStr) {
       const [y1, m1, d1] = todayStr.split('-').map(Number);
       const [y2, m2, d2] = dateStr.split('-').map(Number);
@@ -464,22 +461,24 @@
       return Math.max(0, Math.round(diff / 86400000));
     }
 
-    function renderDashboard(member) {
+    function renderDashboard(member, crew) {
       const selectedTags = new Set();
 
       app.innerHTML = `
         <header class="app-header">
           <div>
-            <div class="brand">BROTHERSANDARMS</div>
+            <div class="brand">${escapeHtml(crew.name.toUpperCase())}</div>
           </div>
           <div class="center-date">
             <div class="clock" id="clock"></div>
           </div>
-          <div class="countdown">
-            <div class="countdown-label caps">Competition in</div>
-            <div class="countdown-num" id="countdown-num"></div>
-            <div class="countdown-label caps">Days</div>
-          </div>
+          ${crew.competitionDate ? `
+            <div class="countdown">
+              <div class="countdown-label caps">Competition in</div>
+              <div class="countdown-num" id="countdown-num"></div>
+              <div class="countdown-label caps">Days</div>
+            </div>
+          ` : ''}
         </header>
 
         <div class="row" style="margin-bottom: 16px;">
@@ -661,7 +660,9 @@
         const [h, ampm] = time.split(' ');
         document.getElementById('clock').innerHTML =
           `${h}<span class="ampm">${ampm || ''}</span> on ${dateStr}`;
-        document.getElementById('countdown-num').textContent = daysUntil(COMPETITION_DATE, api.today());
+        if (crew.competitionDate) {
+          document.getElementById('countdown-num').textContent = daysUntil(crew.competitionDate, api.today());
+        }
       }
       tick();
       const clockTimer = setInterval(tick, 1000);
@@ -801,13 +802,13 @@
         }).join('');
       }
 
-      const unwatchMembers = api.watchMembers((m) => { members = m; renderFeed(); });
+      const unwatchMembers = api.watchMembers(member.crewId, (m) => { members = m; renderFeed(); });
       const unwatchFeed = api.watchFeed((workouts) => {
         const today = api.today();
         todaysWorkouts = workouts.filter((w) => w.performedOn === today);
         renderFeed();
         loadRankings();
-      }, { pageSize: 50 });
+      }, { crewId: member.crewId, pageSize: 50 });
       cleanup.push(unwatchMembers, unwatchFeed);
 
       // ---- crew chat (live, full history) ----
@@ -844,7 +845,7 @@
         if (wasAtBottom) chatList.scrollTop = chatList.scrollHeight;
       }
 
-      const unwatchChat = api.watchChat((messages) => {
+      const unwatchChat = api.watchChat(member.crewId, (messages) => {
         chatMessages = messages;
         renderChatList();
       }, (err) => { chatError.textContent = err.message; });
@@ -901,7 +902,7 @@
         let cursor = null;
         let all = [];
         do {
-          const res = await api.feed({ ...filters, pageSize: 100, cursor });
+          const res = await api.feed({ crewId: member.crewId, ...filters, pageSize: 100, cursor });
           all = all.concat(res.workouts);
           cursor = res.cursor;
         } while (cursor);
@@ -958,7 +959,13 @@
         document.getElementById('cal-prev').disabled = atStartCap();
       }
 
-      const [compYear, compMonth] = COMPETITION_DATE.split('-').map(Number); // compMonth is 1-indexed
+      // Falls back to two years out if this crew has no competition date set.
+      const fallbackCompDate = (() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 2);
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      })();
+      const [compYear, compMonth] = (crew.competitionDate || fallbackCompDate).split('-').map(Number); // compMonth is 1-indexed
       const atCompetitionCap = () => calState.year > compYear || (calState.year === compYear && calState.month >= compMonth - 1);
       const atStartCap = () => calState.year < CAL_START_YEAR || (calState.year === CAL_START_YEAR && calState.month <= CAL_START_MONTH);
 
@@ -979,14 +986,6 @@
       const monthLabel = (month) => {
         const [y, m] = month.split('-').map(Number);
         return `${MONTH_NAMES[m - 1]} ${y}`;
-      };
-
-      // Fixed identity colors for the weight chart -- validated as a categorical
-      // set (dataviz skill: lightness band, chroma floor, CVD separation all pass).
-      const WEIGHT_CHART_COLORS = { sonny: '#eda100', jonny: '#2a78d6', tyler: '#4a3aa7' };
-      const chartColorFor = (name) => {
-        const first = String(name || '').trim().split(/\s+/)[0]?.toLowerCase();
-        return WEIGHT_CHART_COLORS[first] || avatarColor(name);
       };
 
       function monthRange(start, end) {
@@ -1040,7 +1039,7 @@
         }).join('');
 
         const linesSvg = members.map((m) => {
-          const color = chartColorFor(m.displayName);
+          const color = avatarColor(m.displayName);
           const pts = months
             .map((mo, i) => (byMonthUser[mo]?.[m.id] != null ? { i, v: byMonthUser[mo][m.id] } : null))
             .filter(Boolean);
@@ -1061,7 +1060,7 @@
             ${gridSvg}${linesSvg}${xLabelsSvg}
           </svg>
           <div class="cal-breakdown">
-            ${members.map((m) => `<span class="cal-person"><span class="cal-swatch" style="background:${chartColorFor(m.displayName)}"></span>${escapeHtml(m.displayName)}</span>`).join('')}
+            ${members.map((m) => `<span class="cal-person"><span class="cal-swatch" style="background:${avatarColor(m.displayName)}"></span>${escapeHtml(m.displayName)}</span>`).join('')}
           </div>
         `;
       }
@@ -1131,7 +1130,7 @@
         renderWeightViews();
       }
 
-      const unwatchWeights = api.watchWeights((weights) => { allWeights = weights; renderWeightViews(); });
+      const unwatchWeights = api.watchWeights(member.crewId, (weights) => { allWeights = weights; renderWeightViews(); });
       cleanup.push(unwatchWeights);
 
       const weightPhotoPicker = document.getElementById('weight-photo-picker');

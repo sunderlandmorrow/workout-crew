@@ -32,10 +32,21 @@ export function chatMessage(v) {
   return s;
 }
 
+// Invite codes are "<crewId>_<random suffix>" so the crew a code belongs to
+// can be read straight off the code, with no extra lookup needed.
+const INVITE_CODE_RE = /^([a-z0-9-]{2,40})_([A-Za-z0-9]{4,20})$/;
+
 export function inviteCode(v) {
   const s = typeof v === 'string' ? v.trim() : '';
-  if (!/^[A-Za-z0-9_-]{6,64}$/.test(s)) throw bad('Wrong group code');
+  if (!INVITE_CODE_RE.test(s)) throw bad('Wrong group code');
   return s;
+}
+
+/** Pulls the crew id out of a valid invite code, e.g. 'brothersandarms_x7k2m9' -> 'brothersandarms'. */
+export function crewIdFromInviteCode(code) {
+  const m = INVITE_CODE_RE.exec(code);
+  if (!m) throw bad('Wrong group code');
+  return m[1];
 }
 
 function optNumber(v, field, { min, max, integer }) {

@@ -18,10 +18,16 @@ Firebase      ──  Authentication (email + password)
                   Security rules = the backend (who can do what)
 ```
 
+The database can host **several isolated crews** at once (e.g. one for you and your
+friends, a separate one for a different group) -- each crew only ever sees its own
+members, workouts, chat, and weigh-ins. A crew is just a `crews/{crewId}` document
+you create by hand in the console; which crew someone joins is encoded in the invite
+code they sign up with (`<crewId>_<random suffix>`, e.g. `brothersandarms_X7K2M9`).
+
 | File | What it is |
 |---|---|
-| `firestore.rules` | The backend logic. Only people with the invite code can join; you can only edit your own workouts; anyone in the crew can give kudos; anyone in the crew can read/post to the shared chat. |
-| `firestore.indexes.json` | One database index the "filter feed by person" query needs. |
+| `firestore.rules` | The backend logic. Only people with a valid invite code can join, and only into the crew that code belongs to; you can only see/edit your own crew's data; you can only edit your own workouts; anyone in a crew can give kudos or read/post to that crew's chat. |
+| `firestore.indexes.json` | Database indexes the crew-scoped feed/members/chat/weights queries need. |
 | `storage.rules` | Backend logic for chat photos. Requires the Blaze plan (Cloud Storage isn't available on Spark for new projects) -- see setup step 3b. |
 | `js/api.js` | Data layer. The GUI calls this and never touches Firebase directly. |
 | `js/firebase-config.js` | Your project's Firebase keys (you paste these in). |
@@ -50,14 +56,12 @@ Firebase      ──  Authentication (email + password)
 2. Choose a location near you (for example `us-west1`). This can't be changed later.
 3. Start in **production mode**.
 4. Open the **Rules** tab, replace everything with the contents of `firestore.rules`, and click **Publish**.
-5. Open the **Indexes** tab → **Composite** → **Create index**:
-   - Collection ID: `workouts`
-   - Field 1: `userId`, Ascending
-   - Field 2: `sortKey`, Descending
-   - Query scope: Collection
+5. Open the **Indexes** tab → **Composite** → **Create index**, and add each of the
+   indexes listed in `firestore.indexes.json` (collection, fields, in that order).
 
-   (If you skip this, the "one person's workouts" filter will fail with an error
-   that contains a link to create it, so you can also just click that.)
+   (If you skip this, the queries that need them will fail with an error that
+   contains a link to create that specific index, so you can also just click those
+   links the first time each query runs.)
 
 ### 3b. (Optional) Turn on chat photos
 
@@ -72,16 +76,31 @@ if you don't want a card on file -- everything else in the app works fine withou
 2. **Build → Storage → Get started**, choose a location, keep the default bucket.
 3. Open the **Rules** tab, replace everything with the contents of `storage.rules`, and click **Publish**.
 
-### 4. Create your group's invite code
+### 4. Create a crew and its invite code
 
-1. In **Firestore Database → Data**, click **Start collection**.
-2. Collection ID: `inviteCodes`
-3. Document ID: your secret code, e.g. `iron-crew-58213`
-   (6+ characters, letters/numbers/`-`/`_` only; make it hard to guess).
-4. Add any field, e.g. `note` = `friends`, and save.
+Each isolated group needs a `crews` document (its identity) and at least one
+`inviteCodes` document (how people get into it). Do this once per crew.
 
-Friends type this code when signing up. To stop new sign-ups, delete the document.
-To let a new wave of people in, create a new code.
+1. Pick a **crewId**: lowercase letters/digits/hyphens only, e.g. `brothersandarms`.
+2. In **Firestore Database → Data**, click **Start collection**.
+3. Collection ID: `crews`. Document ID: your crewId (e.g. `brothersandarms`).
+4. Add fields:
+   - `name` (string) — shown as the crew's brand name in the header, e.g. `BrothersAndArms`
+   - `competitionDate` (string, optional) — `YYYY-MM-DD`; powers the countdown. Skip it and the countdown just doesn't show.
+   - `createdAt` (timestamp) — set to the current time
+5. Save, then **Start collection** again.
+6. Collection ID: `inviteCodes`.
+7. Document ID: your invite code, in the form `<crewId>_<random suffix>`,
+   e.g. `brothersandarms_X7K2M9RT` (the suffix is 4-20 letters/digits; make it hard to guess).
+   The `<crewId>` part **must exactly match** the crew document id from step 3 --
+   that's how the app knows which crew a code leads to.
+8. Add field `crewId` (string) = the same crewId, and save.
+
+Give that code to your friends -- they type it when signing up and land in that
+crew. To stop new sign-ups, delete the `inviteCodes` document. To let a new wave
+of people into the same crew, create another `inviteCodes` document with the same
+`crewId` prefix. To start a **second, completely separate** crew, repeat this whole
+section with a different crewId.
 
 ### 5. Connect the website to Firebase
 
@@ -115,7 +134,8 @@ Open the site in **Safari** → Share button → **Add to Home Screen**.
 Open the site in a desktop browser, open the developer console, and run:
 
 ```js
-await api.signup({ email: 'you@example.com', password: 'secret123', displayName: 'Sam', groupCode: 'iron-crew-58213' })
+await api.signup({ email: 'you@example.com', password: 'secret123', displayName: 'Sam', groupCode: 'brothersandarms_X7K2M9RT' })
+const me = await api.me()  // { ..., crewId: 'brothersandarms' }
 
 await api.logWorkout({
   performedOn: api.today(),
@@ -125,9 +145,9 @@ await api.logWorkout({
   exercises: [{ name: 'Squat', sets: 5, reps: 5, weight: 225, unit: 'lb' }],
 })
 
-(await api.feed()).workouts
-await api.stats()          // last 7 days
-await api.stats(30)        // last 30 days
+(await api.feed({ crewId: me.crewId })).workouts
+await api.stats(me.crewId)        // last 7 days
+await api.stats(me.crewId, 30)    // last 30 days
 ```
 
 The page's "Loading…" line changes to show whether you're logged in.
@@ -137,55 +157,79 @@ The page's "Loading…" line changes to show whether you're logged in.
 Every function throws an `Error` with a message that's safe to show on screen.
 
 **Session**
-- `onSessionChange(cb)` → cb gets `{ user, member }`. `user` is null when logged out; `member` is null
-  if logged in but not in the crew. Returns an unsubscribe function. (Right after `signup`, this can
+- `onSessionChange(cb)` → cb gets `{ user, member, crew }`. `user` is null when logged out; `member`/`crew`
+  are null if logged in but not in a crew. Returns an unsubscribe function. (Right after `signup`, this can
   briefly report `member: null` before the profile is saved; call `api.me()` after signup finishes.)
-- `signup({ email, password, displayName, groupCode })` → member
+- `signup({ email, password, displayName, groupCode })` → member. `groupCode` is `<crewId>_<suffix>`;
+  the crew it joins is read straight off the code.
 - `joinCrew({ displayName, groupCode })` → member (logged-in person without a profile)
 - `login(email, password)` → member
 - `logout()`, `resetPassword(email)`, `currentUserId()`
 
-**Members**
-- `me()` → `{ id, displayName, avatarUrl, email, joinedAt }`
+**Members** (all crew-scoped)
+- `me()` → `{ id, crewId, displayName, avatarUrl, email, joinedAt }`
 - `rename(displayName)`
 - `setAvatar(file)` → uploads to Firebase Storage (images only, 8MB max), sets it as your profile picture. Requires the Blaze plan + `storage.rules` published.
-- `members()` / `watchMembers(cb)` → `[{ id, displayName, avatarUrl, joinedAt }]`
+- `members(crewId)` / `watchMembers(crewId, cb)` → `[{ id, crewId, displayName, avatarUrl, joinedAt }]`
 
 **Workouts**
-- `logWorkout({ performedOn, type, durationMin?, notes?, exercises? })` → workout
+- `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → workout (crewId is stamped from your own membership)
   - `exercises`: `[{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }]`
 - `updateWorkout(id, { ...any of the above })`, `deleteWorkout(id)` (own workouts only)
 - `getWorkout(id)`
-- `feed({ userId?, from?, to?, type?, pageSize?, cursor? })` → `{ workouts, cursor }`;
+- `feed({ crewId, userId?, from?, to?, type?, pageSize?, cursor? })` → `{ workouts, cursor }`;
   pass `cursor` back to load the next page (null means no more)
-- `watchFeed(cb, { userId?, pageSize? })` → live-updating newest workouts; returns unsubscribe
+- `watchFeed(cb, { crewId, userId?, pageSize? })` → live-updating newest workouts; returns unsubscribe
 
 A workout looks like:
 ```js
-{ id, userId, isMine, performedOn: '2026-09-15', type: 'lift', durationMin: 45, notes,
+{ id, userId, isMine, performedOn: '2026-09-15', type: 'lift', durationMin: 45, notes, rating,
   exercises: [...], kudos: [uid...], kudosCount, kudoedByMe, createdAt, updatedAt, pending }
 ```
 
 **Kudos**: `kudos(id)`, `unkudos(id)`
 
-**Chat**: one shared channel, permanent history.
+**Chat**: one shared channel per crew, permanent history.
 - `sendMessage(text)`
 - `sendPhoto(file, caption?)` → uploads to Firebase Storage (images only, 8MB max), posts with the caption. Requires the Blaze plan + `storage.rules` published.
-- `watchChat(callback, onError?)` → cb gets `[{ id, userId, displayName, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
+- `watchChat(crewId, callback, onError?)` → cb gets `[{ id, userId, displayName, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
 
 **Monthly weigh-in**: one entry per person per calendar month, can't be changed once logged.
 - `currentMonth()` → `'YYYY-MM'`
 - `logWeight(weight)` (lb)
 - `myWeightThisMonth()` → `{ id, userId, month, weight, createdAt }` or `null`
-- `watchWeights(callback, onError?)` → cb gets every weigh-in ever logged, newest month first. Returns an unsubscribe function.
+- `watchWeights(crewId, callback, onError?)` → cb gets every weigh-in ever logged in that crew, newest month first. Returns an unsubscribe function.
 
-**Leaderboard**: `stats(days = 7)` →
+**Leaderboard**: `stats(crewId, days = 7)` →
 ```js
 { range: { from, to, days },
   leaderboard: [{ user: { id, displayName }, workouts, minutes, activeDays,
                   streak: { current, best }, lastWorkoutOn }] }
 ```
 Sorted by active days, then workouts, then minutes. Streaks look back 90 days.
+
+## Migrating an existing (pre-crews) database
+
+If your `members`/`workouts`/`messages`/`weights` docs already exist from before crews
+were added, they have no `crewId` field. **Do these in order** -- publishing the new
+rules or deploying the new frontend before the data is migrated will lock everyone
+out (`crewId` won't exist yet, so every crew-scoped query/rule check fails):
+
+1. Get a service account key: **Project settings → Service accounts → Generate new private key**.
+   Keep it out of git -- `scripts/.gitignore` already excludes `serviceAccountKey*.json`.
+2. `cd scripts && npm install`
+3. **Back it up first:** `node backup-firestore.mjs --service-account ./serviceAccountKey.json`
+   Writes every collection to local JSON under `scripts/backups/<timestamp>/` (also gitignored --
+   it's your friends' real data, never commit it). If anything below goes wrong, restore with
+   `node restore-firestore.mjs --service-account ./serviceAccountKey.json --in ./backups/<timestamp> --apply`.
+4. Dry run the migration: `node migrate-to-crews.mjs --service-account ./serviceAccountKey.json --crew-id brothersandarms --crew-name "BrothersAndArms"`
+   Check the counts it prints look right.
+5. Apply it: add `--apply` to the same command. It creates the `crews` doc, mints a
+   fresh invite code for future sign-ups (printed once -- save it), and backfills
+   `crewId` onto every existing `members`/`workouts`/`messages`/`weights` doc.
+6. *Now* publish the new `firestore.rules` and `storage.rules` (Firestore/Storage → Rules → Publish).
+7. *Now* deploy the new frontend (push to `main`; see below).
+8. Delete the service account key file when you're done -- it's a permanent admin credential.
 
 ## Deploying updates
 

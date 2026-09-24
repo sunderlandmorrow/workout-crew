@@ -16,16 +16,34 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid));
     }
 
+    // Which crew the signed-in user belongs to.
+    function myCrewId() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data.crewId;
+    }
+
     function validName(n) {
       return n is string && n.size() >= 1 && n.size() <= 40;
     }
 
+    // "<crewId>_<random suffix>" -- the crew a code belongs to is encoded in the code itself.
     function validCode(c) {
-      return c is string && c.matches('^[A-Za-z0-9_-]{6,64}$');
+      return c is string && c.matches('^[a-z0-9-]{2,40}_[A-Za-z0-9]{4,20}$');
+    }
+
+    function crewIdOfCode(c) {
+      return c.split('_')[0];
     }
 
     function codeExists(c) {
       return exists(/databases/$(database)/documents/inviteCodes/$(c));
+    }
+
+    // ---------- crews ----------
+    // Created by hand in the console, one per isolated group: { name, competitionDate?, createdAt }.
+    // Doc id is the crewId slug that invite codes for that crew start with (e.g. "brothersandarms").
+    match /crews/{crewId} {
+      allow read: if isMember() && myCrewId() == crewId;
+      allow write: if false;
     }
 
     // ---------- invite codes (you create these in the console) ----------
@@ -38,10 +56,12 @@ service cloud.firestore {
       let d = request.resource.data;
       return signedIn()
         && request.auth.uid == uid
-        && d.keys().hasOnly(['displayName', 'inviteCode', 'joinedAt'])
+        && d.keys().hasOnly(['displayName', 'inviteCode', 'crewId', 'joinedAt'])
         && validName(d.displayName)
         && validCode(d.inviteCode)
         && codeExists(d.inviteCode)
+        && d.crewId == crewIdOfCode(d.inviteCode)
+        && exists(/databases/$(database)/documents/crews/$(d.crewId))
         && d.joinedAt == request.time;
     }
 
@@ -61,7 +81,7 @@ service cloud.firestore {
     }
 
     match /members/{uid} {
-      allow read: if isMember() || (signedIn() && request.auth.uid == uid);
+      allow read: if (isMember() && resource.data.crewId == myCrewId()) || (signedIn() && request.auth.uid == uid);
       allow create: if validNewMember(uid);
       allow update: if validProfileUpdate(uid);
       allow delete: if false;
@@ -81,10 +101,11 @@ service cloud.firestore {
     }
 
     function validWorkout(d) {
-      let allowed = ['userId', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
-      let required = ['userId', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
+      let allowed = ['userId', 'crewId', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
+      let required = ['userId', 'crewId', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
       return d.keys().hasOnly(allowed)
         && d.keys().hasAll(required)
+        && d.crewId == myCrewId()
         && d.performedOn is string
         && d.performedOn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && d.sortKey is string
@@ -126,7 +147,8 @@ service cloud.firestore {
       let before = resource.data.kudos.toSet();
       let after = request.resource.data.kudos;
       let me = [request.auth.uid];
-      return changed.hasOnly(['kudos'])
+      return resource.data.crewId == myCrewId()
+        && changed.hasOnly(['kudos'])
         && after is list
         && after.size() <= 100
         && after.toSet().difference(before).hasOnly(me)
@@ -134,10 +156,10 @@ service cloud.firestore {
     }
 
     match /workouts/{workoutId} {
-      allow read: if isMember();
+      allow read: if isMember() && resource.data.crewId == myCrewId();
       allow create: if isMember() && validNewWorkout();
       allow update: if isMember() && (validOwnerEdit() || validKudosChange());
-      allow delete: if isMember() && resource.data.userId == request.auth.uid;
+      allow delete: if isMember() && resource.data.userId == request.auth.uid && resource.data.crewId == myCrewId();
     }
 
     // ---------- crew chat (one shared channel, permanent history) ----------
@@ -149,9 +171,10 @@ service cloud.firestore {
     }
 
     function validMessage(d) {
-      return d.keys().hasOnly(['userId', 'displayName', 'text', 'imageUrl', 'createdAt'])
-        && d.keys().hasAll(['userId', 'displayName', 'text', 'createdAt'])
+      return d.keys().hasOnly(['userId', 'crewId', 'displayName', 'text', 'imageUrl', 'createdAt'])
+        && d.keys().hasAll(['userId', 'crewId', 'displayName', 'text', 'createdAt'])
         && d.userId == request.auth.uid
+        && d.crewId == myCrewId()
         && validName(d.displayName)
         && d.text is string && d.text.size() <= 2000
         && (d.text.size() >= 1 || 'imageUrl' in d)
@@ -160,16 +183,17 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      allow read: if isMember();
+      allow read: if isMember() && resource.data.crewId == myCrewId();
       allow create: if isMember() && validMessage(request.resource.data);
       allow update, delete: if false;
     }
 
     // ---------- monthly weigh-ins (one per person per month, doc id = uid_YYYY-MM) ----------
     function validWeight(d) {
-      return d.keys().hasOnly(['userId', 'month', 'weight', 'photoUrl', 'createdAt'])
-        && d.keys().hasAll(['userId', 'month', 'weight', 'photoUrl', 'createdAt'])
+      return d.keys().hasOnly(['userId', 'crewId', 'month', 'weight', 'photoUrl', 'createdAt'])
+        && d.keys().hasAll(['userId', 'crewId', 'month', 'weight', 'photoUrl', 'createdAt'])
         && d.userId == request.auth.uid
+        && d.crewId == myCrewId()
         && d.month is string && d.month.matches('^[0-9]{4}-[0-9]{2}$')
         && d.weight is number && d.weight > 0 && d.weight <= 1000
         && d.photoUrl is string && d.photoUrl.size() <= 500
@@ -178,7 +202,7 @@ service cloud.firestore {
     }
 
     match /weights/{weightId} {
-      allow read: if isMember();
+      allow read: if isMember() && resource.data.crewId == myCrewId();
       allow create: if isMember()
         && validWeight(request.resource.data)
         && weightId == request.resource.data.userId + '_' + request.resource.data.month;

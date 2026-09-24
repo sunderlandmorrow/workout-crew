@@ -6,16 +6,22 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // You're in the crew once you have a members/{yourUid} document in Firestore.
-    function isMember() {
+    // Which crew the signed-in user belongs to (null if not a member of anyone's crew).
+    function myCrewId() {
+      return firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.crewId;
+    }
+
+    // You're in this crew once you have a members/{yourUid} document with a matching crewId.
+    function isCrewMember(crewId) {
       return request.auth != null
-        && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid));
+        && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid))
+        && myCrewId() == crewId;
     }
 
     // Chat photos: only the uploader can write to their own folder, images only, 8MB cap.
-    match /chatImages/{uid}/{fileName} {
-      allow read: if isMember();
-      allow write: if isMember()
+    match /chatImages/{crewId}/{uid}/{fileName} {
+      allow read: if isCrewMember(crewId);
+      allow write: if isCrewMember(crewId)
         && request.auth.uid == uid
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
@@ -23,9 +29,9 @@ service firebase.storage {
     }
 
     // Monthly progress photos: same shape as chat photos.
-    match /progressPhotos/{uid}/{fileName} {
-      allow read: if isMember();
-      allow write: if isMember()
+    match /progressPhotos/{crewId}/{uid}/{fileName} {
+      allow read: if isCrewMember(crewId);
+      allow write: if isCrewMember(crewId)
         && request.auth.uid == uid
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
@@ -33,13 +39,13 @@ service firebase.storage {
     }
 
     // Profile pictures: one file per person, replaceable any time.
-    match /avatars/{uid}/{fileName} {
-      allow read: if isMember();
-      allow write: if isMember()
+    match /avatars/{crewId}/{uid}/{fileName} {
+      allow read: if isCrewMember(crewId);
+      allow write: if isCrewMember(crewId)
         && request.auth.uid == uid
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if isMember() && request.auth.uid == uid;
+      allow delete: if isCrewMember(crewId) && request.auth.uid == uid;
     }
   }
 }

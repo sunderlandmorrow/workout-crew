@@ -91,7 +91,10 @@ test('names and invite codes', () => {
   assert.equal(v.displayName('  Sam '), 'Sam');
   assert.throws(() => v.displayName('   '));
   assert.throws(() => v.displayName('x'.repeat(41)));
-  assert.equal(v.inviteCode(' lift-crew-8431 '), 'lift-crew-8431');
-  assert.throws(() => v.inviteCode('abc'));          // too short
-  assert.throws(() => v.inviteCode('bad/code!!'));   // would break the rules path
+  assert.equal(v.inviteCode(' lift-crew_8431 '), 'lift-crew_8431');
+  assert.throws(() => v.inviteCode('abc'));               // no crewId_suffix shape
+  assert.throws(() => v.inviteCode('lift-crew-8431'));    // missing the '_' separator
+  assert.throws(() => v.inviteCode('bad/code!!_1234'));   // would break the rules path
+  assert.equal(v.crewIdFromInviteCode('lift-crew_8431'), 'lift-crew');
+  assert.throws(() => v.crewIdFromInviteCode('not-a-valid-code'));
 });

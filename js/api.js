@@ -30,6 +30,7 @@ const db = initializeFirestore(app, {
 });
 const storage = getStorage(app);
 
+const crewsCol = collection(db, 'crews');
 const membersCol = collection(db, 'members');
 const workoutsCol = collection(db, 'workouts');
 const messagesCol = collection(db, 'messages');
@@ -76,7 +77,18 @@ function requireUser() {
 // ---------------------------------------------------------------------------
 function toMember(snap) {
   const d = snap.data();
-  return { id: snap.id, displayName: d.displayName, avatarUrl: d.avatarUrl ?? null, joinedAt: d.joinedAt?.toDate() ?? null };
+  return {
+    id: snap.id,
+    crewId: d.crewId,
+    displayName: d.displayName,
+    avatarUrl: d.avatarUrl ?? null,
+    joinedAt: d.joinedAt?.toDate() ?? null,
+  };
+}
+
+function toCrew(snap) {
+  const d = snap.data();
+  return { id: snap.id, name: d.name, competitionDate: d.competitionDate ?? null };
 }
 
 function toMessage(snap) {
@@ -129,8 +141,9 @@ function toWorkout(snap) {
 }
 
 // Feed query builder. Date filters use sortKey so no extra indexes are needed.
-function feedQuery({ userId, from, to, pageSize = 20, after } = {}) {
-  const parts = [];
+function feedQuery({ crewId, userId, from, to, pageSize = 20, after } = {}) {
+  if (!crewId) throw new Error('crewId is required');
+  const parts = [where('crewId', '==', crewId)];
   if (userId) parts.push(where('userId', '==', userId));
   if (from) {
     if (!v.isDate(from)) throw new v.ValidationError('from must be a date');
@@ -154,30 +167,36 @@ export const api = {
 
   // ---- session ----
 
-  /** Calls back with { user, member } whenever login state changes.
-   *  user = null when logged out. member = null when logged in but not in the crew yet. */
+  /** Calls back with { user, member, crew } whenever login state changes.
+   *  user = null when logged out. member/crew = null when logged in but not in a crew yet. */
   onSessionChange(callback) {
     return onAuthStateChanged(auth, async (user) => {
-      if (!user) return callback({ user: null, member: null });
+      if (!user) return callback({ user: null, member: null, crew: null });
       let member = null;
+      let crew = null;
       try {
         const snap = await getDoc(doc(membersCol, user.uid));
-        if (snap.exists()) member = toMember(snap);
+        if (snap.exists()) {
+          member = toMember(snap);
+          const crewSnap = await getDoc(doc(crewsCol, member.crewId));
+          if (crewSnap.exists()) crew = toCrew(crewSnap);
+        }
       } catch { /* offline with nothing cached: treat as unknown */ }
-      callback({ user: { id: user.uid, email: user.email }, member });
+      callback({ user: { id: user.uid, email: user.email }, member, crew });
     });
   },
 
   currentUserId: () => auth.currentUser?.uid ?? null,
 
-  /** Create an account and join the crew in one step. */
+  /** Create an account and join the crew (identified by the invite code) in one step. */
   signup: wrap(async ({ email, password, displayName, groupCode }) => {
     const name = v.displayName(displayName);
     const code = v.inviteCode(groupCode);
+    const crewId = v.crewIdFromInviteCode(code);
     const cred = await createUserWithEmailAndPassword(auth, String(email).trim(), password);
     try {
       await setDoc(doc(membersCol, cred.user.uid), {
-        displayName: name, inviteCode: code, joinedAt: serverTimestamp(),
+        displayName: name, inviteCode: code, crewId, joinedAt: serverTimestamp(),
       });
     } catch (err) {
       // Bad group code: remove the half-made account so they can try again.
@@ -191,10 +210,13 @@ export const api = {
   /** For someone who's logged in but has no member profile yet. */
   joinCrew: wrap(async ({ displayName, groupCode }) => {
     const user = requireUser();
+    const code = v.inviteCode(groupCode);
+    const crewId = v.crewIdFromInviteCode(code);
     try {
       await setDoc(doc(membersCol, user.uid), {
         displayName: v.displayName(displayName),
-        inviteCode: v.inviteCode(groupCode),
+        inviteCode: code,
+        crewId,
         joinedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -234,21 +256,21 @@ export const api = {
     if (!member) throw new Error('Join the crew first');
     if (!file.type.startsWith('image/')) throw new v.ValidationError('Only images can be uploaded');
     if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
-    const sref = storageRef(storage, `avatars/${user.uid}/photo`);
+    const sref = storageRef(storage, `avatars/${member.crewId}/${user.uid}/photo`);
     await uploadBytes(sref, file, { contentType: file.type });
     const avatarUrl = await getDownloadURL(sref);
     await updateDoc(doc(membersCol, user.uid), { avatarUrl });
     return api.me();
   }),
 
-  members: wrap(async () => {
-    const snap = await getDocs(query(membersCol, orderBy('displayName')));
+  members: wrap(async (crewId) => {
+    const snap = await getDocs(query(membersCol, where('crewId', '==', crewId), orderBy('displayName')));
     return snap.docs.map(toMember);
   }),
 
-  /** Live list of members. Returns an unsubscribe function. */
-  watchMembers(callback, onError) {
-    return onSnapshot(query(membersCol, orderBy('displayName')),
+  /** Live list of members in a crew. Returns an unsubscribe function. */
+  watchMembers(crewId, callback, onError) {
+    return onSnapshot(query(membersCol, where('crewId', '==', crewId), orderBy('displayName')),
       (snap) => callback(snap.docs.map(toMember)),
       (err) => onError?.(friendly(err)));
   },
@@ -259,9 +281,12 @@ export const api = {
    *  exercises: [{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }] */
   logWorkout: wrap(async (input) => {
     const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
     const w = v.workout(input);
     const ref = await addDoc(workoutsCol, {
       userId: user.uid,
+      crewId: member.crewId,
       ...w,
       sortKey: makeSortKey(w.performedOn),
       kudos: [],
@@ -293,7 +318,7 @@ export const api = {
   deleteWorkout: wrap((id) => deleteDoc(doc(workoutsCol, id))),
 
   /** One page of the feed, newest first.
-   *  filters: { userId?, from?, to?, type?, pageSize?, cursor? }
+   *  filters: { crewId, userId?, from?, to?, type?, pageSize?, cursor? }
    *  Returns { workouts, cursor } -- pass cursor back in to get the next page (null = no more). */
   feed: wrap(async ({ cursor, type, ...filters } = {}) => {
     const pageSize = filters.pageSize ?? 20;
@@ -306,9 +331,9 @@ export const api = {
     };
   }),
 
-  /** Live feed of the most recent workouts. Returns an unsubscribe function. */
-  watchFeed(callback, { userId, pageSize = 30 } = {}, onError) {
-    return onSnapshot(feedQuery({ userId, pageSize }),
+  /** Live feed of the most recent workouts in a crew. Returns an unsubscribe function. */
+  watchFeed(callback, { crewId, userId, pageSize = 30 } = {}, onError) {
+    return onSnapshot(feedQuery({ crewId, userId, pageSize }),
       (snap) => callback(snap.docs.map(toWorkout)),
       (err) => onError?.(friendly(err)));
   },
@@ -327,7 +352,7 @@ export const api = {
 
   // ---- chat ----
 
-  /** One shared, permanent channel for the whole crew. */
+  /** One shared, permanent channel per crew. */
   sendMessage: wrap(async (text) => {
     const user = requireUser();
     const member = await api.me();
@@ -335,6 +360,7 @@ export const api = {
     const msg = v.chatMessage(text);
     await addDoc(messagesCol, {
       userId: user.uid,
+      crewId: member.crewId,
       displayName: member.displayName,
       text: msg,
       createdAt: serverTimestamp(),
@@ -348,12 +374,13 @@ export const api = {
     if (!member) throw new Error('Join the crew first');
     if (!file.type.startsWith('image/')) throw new v.ValidationError('Only images can be shared');
     if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Image must be under 8MB');
-    const path = `chatImages/${user.uid}/${Date.now()}_${file.name}`;
+    const path = `chatImages/${member.crewId}/${user.uid}/${Date.now()}_${file.name}`;
     const sref = storageRef(storage, path);
     await uploadBytes(sref, file, { contentType: file.type });
     const imageUrl = await getDownloadURL(sref);
     await addDoc(messagesCol, {
       userId: user.uid,
+      crewId: member.crewId,
       displayName: member.displayName,
       text: String(caption || '').trim().slice(0, 2000),
       imageUrl,
@@ -361,9 +388,10 @@ export const api = {
     });
   }),
 
-  /** Live, full-history chat feed (oldest first). Returns an unsubscribe function. */
-  watchChat(callback, onError) {
-    return onSnapshot(query(messagesCol, orderBy('createdAt', 'asc'), limit(1000)),
+  /** Live, full-history chat feed for a crew (oldest first). Returns an unsubscribe function. */
+  watchChat(crewId, callback, onError) {
+    return onSnapshot(
+      query(messagesCol, where('crewId', '==', crewId), orderBy('createdAt', 'asc'), limit(1000)),
       (snap) => callback(snap.docs.map(toMessage)),
       (err) => onError?.(friendly(err)));
   },
@@ -376,17 +404,19 @@ export const api = {
    *  A progress photo is required alongside the weight. */
   logWeight: wrap(async (weight, photoFile) => {
     const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
     const w = v.bodyWeight(weight);
     if (!photoFile) throw new v.ValidationError('Add a progress photo with your weigh-in');
     if (!photoFile.type.startsWith('image/')) throw new v.ValidationError('Only images can be uploaded');
     if (photoFile.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
     const month = localMonth();
-    const sref = storageRef(storage, `progressPhotos/${user.uid}/${month}_${Date.now()}`);
+    const sref = storageRef(storage, `progressPhotos/${member.crewId}/${user.uid}/${month}_${Date.now()}`);
     await uploadBytes(sref, photoFile, { contentType: photoFile.type });
     const photoUrl = await getDownloadURL(sref);
     try {
       await setDoc(doc(weightsCol, `${user.uid}_${month}`), {
-        userId: user.uid, month, weight: w, photoUrl, createdAt: serverTimestamp(),
+        userId: user.uid, crewId: member.crewId, month, weight: w, photoUrl, createdAt: serverTimestamp(),
       });
     } catch (err) {
       if (err.code === 'permission-denied') throw new Error("You've already logged your weight this month");
@@ -400,9 +430,9 @@ export const api = {
     return snap.exists() ? toWeight(snap) : null;
   }),
 
-  /** Live list of every weigh-in ever logged, newest month first. */
-  watchWeights(callback, onError) {
-    return onSnapshot(query(weightsCol, orderBy('month', 'desc')),
+  /** Live list of every weigh-in ever logged in a crew, newest month first. */
+  watchWeights(crewId, callback, onError) {
+    return onSnapshot(query(weightsCol, where('crewId', '==', crewId), orderBy('month', 'desc')),
       (snap) => callback(snap.docs.map(toWeight)),
       (err) => onError?.(friendly(err)));
   },
@@ -412,13 +442,14 @@ export const api = {
   /** Leaderboard for the last `days` days (default 7), plus streaks.
    *  Returns { range: {from, to, days}, leaderboard: [{ user, workouts, minutes, activeDays,
    *            streak: {current, best}, lastWorkoutOn }] } */
-  stats: wrap(async (days = 7) => {
+  stats: wrap(async (crewId, days = 7) => {
     days = Math.min(Math.max(Math.round(days) || 7, 1), STREAK_HISTORY_DAYS);
     const today = localToday();
     const historyFrom = addDays(today, -(STREAK_HISTORY_DAYS - 1));
     const [members, snap] = await Promise.all([
-      api.members(),
+      api.members(crewId),
       getDocs(query(workoutsCol,
+        where('crewId', '==', crewId),
         where('sortKey', '>=', historyFrom),
         orderBy('sortKey', 'desc'),
         limit(2000))),
