@@ -208,6 +208,9 @@
       cursor: pointer;
     }
     .variant-btn.selected { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .exercise-preview { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 20px; font-size: 0.82rem; }
+    .exercise-preview-item { color: var(--ink); }
+    .exercise-preview-item .sets { color: var(--muted); }
     .rating-col { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
     .rating-inputs { display: flex; align-items: center; gap: 10px; }
     .rating-inputs input[type="range"] {
@@ -247,6 +250,7 @@
     .feed-meta { color: var(--muted); font-size: 0.8rem; min-width: 90px; }
     .feed-notes { flex: 1 1 160px; font-size: 0.85rem; }
     .feed-time { color: var(--muted); font-size: 0.78rem; margin-left: auto; white-space: nowrap; }
+    .feed-exercises { flex: 1 0 100%; font-size: 0.78rem; color: var(--muted); }
     .empty { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
 
     /* ---- crew chat ---- */
@@ -613,6 +617,7 @@
                 <button type="button" class="variant-btn caps" data-variant="A">Workout A</button>
                 <button type="button" class="variant-btn caps" data-variant="B">Workout B</button>
               </div>
+              <div class="exercise-preview" id="exercise-preview"></div>
             </div>
 
             <div class="bottom-row">
@@ -896,6 +901,7 @@
       // ---- Structured Lift: Workout A/B picker ----
       const variantSection = document.getElementById('variant-section');
       const variantRow = document.getElementById('variant-row');
+      const exercisePreview = document.getElementById('exercise-preview');
       function renderVariantSection() {
         const show = liftMode === 'structured' && hasTemplates([...selectedTags]);
         variantSection.style.display = show ? '' : 'none';
@@ -903,6 +909,14 @@
         [...variantRow.children].forEach((btn) => {
           btn.classList.toggle('selected', btn.dataset.variant === selectedVariant);
         });
+        if (selectedVariant) {
+          const exercises = buildStructuredExercises([...selectedTags], selectedVariant);
+          exercisePreview.innerHTML = exercises.map((e) => `
+            <span class="exercise-preview-item">${escapeHtml(e.name)} <span class="sets">${e.sets ? `x${e.sets}` : ''}</span></span>
+          `).join('');
+        } else {
+          exercisePreview.innerHTML = '';
+        }
       }
       [...variantRow.children].forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -1010,6 +1024,9 @@
           const time = w.createdAt
             ? w.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
             : '';
+          const exercisesLine = w.exercises && w.exercises.length
+            ? w.exercises.map((e) => `${escapeHtml(e.name)}${e.sets ? ` x${e.sets}` : ''}`).join(', ')
+            : '';
           return `
             <div class="feed-row">
               ${avatarHtml(name, w.userId)}
@@ -1019,6 +1036,7 @@
               <div class="feed-meta">${w.rating ? '★'.repeat(w.rating) + '☆'.repeat(5 - w.rating) : ''}</div>
               <div class="feed-notes">${escapeHtml(w.notes || '')}</div>
               <div class="feed-time">${escapeHtml(time)}</div>
+              ${exercisesLine ? `<div class="feed-exercises">${exercisesLine}</div>` : ''}
             </div>
           `;
         }).join('');
