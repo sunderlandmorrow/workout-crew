@@ -27,6 +27,17 @@ export function parseType(type) {
   return { label: ids.map((id) => LABEL_BY_ID[id] || id).join(' + ') };
 }
 
+// Structured Lift mode: a generic 4-day split. Each "day" is really just a
+// preset combination of MUSCLE_TAGS -- picking one sets the same selectedTags
+// a freeform pick would, so everything downstream (type string, templates,
+// exercises) works unchanged.
+export const SPLIT_DAYS = [
+  { id: 'legs-day', label: 'Legs', tags: ['legs'] },
+  { id: 'chest-triceps-day', label: 'Chest & Triceps', tags: ['chest', 'triceps'] },
+  { id: 'back-biceps-day', label: 'Back & Biceps', tags: ['back', 'biceps'] },
+  { id: 'shoulders-biceps-day', label: 'Shoulders & Biceps', tags: ['shoulders', 'biceps'] },
+];
+
 // Structured Lift mode: generic proven exercise picks per muscle group, two
 // variants (A/B) to alternate between. No entry for 'rest' or 'cardio' -- there's
 // nothing to structure there, so those tags are just skipped when building a

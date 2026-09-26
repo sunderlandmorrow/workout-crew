@@ -363,7 +363,7 @@
 
   <script type="module">
     import api from './js/api.js';
-    import { MUSCLE_TAGS, tagsToType, parseType, hasTemplates, buildStructuredExercises } from './js/routines.js';
+    import { MUSCLE_TAGS, SPLIT_DAYS, tagsToType, parseType, hasTemplates, buildStructuredExercises } from './js/routines.js';
 
     const app = document.getElementById('app');
     let mode = 'login'; // 'login' | 'signup'
@@ -604,7 +604,7 @@
           <div class="card card-checkin">
             <h2 class="caps">Check in</h2>
 
-            <div class="step-label caps">1. What did you hit today?</div>
+            <div class="step-label caps" id="group-row-label">1. What did you hit today?</div>
             <div class="group-row" id="group-row"></div>
 
             <div id="variant-section" style="display:none;">
@@ -774,13 +774,13 @@
         // Flip immediately so the switch feels instant; roll back only if the save fails.
         liftMode = newMode;
         renderLiftSwitch();
-        renderVariantSection();
+        renderCheckinPicker();
         try {
           await api.setLiftMode(newMode);
         } catch (err) {
           liftMode = previousMode;
           renderLiftSwitch();
-          renderVariantSection();
+          renderCheckinPicker();
           window.alert(err.message);
         }
       });
@@ -823,30 +823,73 @@
 
       // ---- check-in form ----
       const groupRow = document.getElementById('group-row');
-      MUSCLE_TAGS.forEach((tag) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'group-btn caps';
-        btn.textContent = tag.label;
-        btn.dataset.tagId = tag.id;
-        btn.addEventListener('click', () => {
-          if (tag.id === 'rest') {
-            selectedTags.clear();
-            selectedTags.add('rest');
-          } else {
-            selectedTags.delete('rest');
-            if (selectedTags.has(tag.id)) selectedTags.delete(tag.id);
-            else selectedTags.add(tag.id);
-          }
-          renderGroupSelection();
-        });
-        groupRow.appendChild(btn);
-      });
+      const groupRowLabel = document.getElementById('group-row-label');
+      const STRUCTURED_PICKS = [
+        ...SPLIT_DAYS,
+        { id: 'cardio-day', label: 'Cardio', tags: ['cardio'] },
+        { id: 'rest-day', label: 'Rest', tags: ['rest'] },
+      ];
+      const sameTags = (tags) => tags.length === selectedTags.size && tags.every((t) => selectedTags.has(t));
+
+      // Rebuilds the picker for the current liftMode: freeform multi-select
+      // muscle groups (open) or a single pick from a preset split (structured).
+      function renderCheckinPicker() {
+        groupRow.innerHTML = '';
+        selectedTags.clear();
+        selectedVariant = null;
+
+        if (liftMode === 'structured') {
+          groupRowLabel.textContent = '1. What do you want to hit today?';
+          STRUCTURED_PICKS.forEach((pick) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'group-btn caps';
+            btn.textContent = pick.label;
+            btn.dataset.pickId = pick.id;
+            btn.addEventListener('click', () => {
+              const isSelected = sameTags(pick.tags);
+              selectedTags.clear();
+              if (!isSelected) pick.tags.forEach((t) => selectedTags.add(t));
+              renderGroupSelection();
+            });
+            groupRow.appendChild(btn);
+          });
+        } else {
+          groupRowLabel.textContent = '1. What did you hit today?';
+          MUSCLE_TAGS.forEach((tag) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'group-btn caps';
+            btn.textContent = tag.label;
+            btn.dataset.tagId = tag.id;
+            btn.addEventListener('click', () => {
+              if (tag.id === 'rest') {
+                selectedTags.clear();
+                selectedTags.add('rest');
+              } else {
+                selectedTags.delete('rest');
+                if (selectedTags.has(tag.id)) selectedTags.delete(tag.id);
+                else selectedTags.add(tag.id);
+              }
+              renderGroupSelection();
+            });
+            groupRow.appendChild(btn);
+          });
+        }
+        renderGroupSelection();
+      }
 
       function renderGroupSelection() {
-        [...groupRow.children].forEach((btn) => {
-          btn.classList.toggle('selected', selectedTags.has(btn.dataset.tagId));
-        });
+        if (liftMode === 'structured') {
+          [...groupRow.children].forEach((btn) => {
+            const pick = STRUCTURED_PICKS.find((p) => p.id === btn.dataset.pickId);
+            btn.classList.toggle('selected', sameTags(pick.tags));
+          });
+        } else {
+          [...groupRow.children].forEach((btn) => {
+            btn.classList.toggle('selected', selectedTags.has(btn.dataset.tagId));
+          });
+        }
         renderVariantSection();
       }
 
@@ -868,6 +911,8 @@
         });
       });
 
+      renderCheckinPicker();
+
       const RATING_LABELS = ['Rough', 'Tough', 'OK', 'Good', 'Crushed it'];
       const ratingInput = document.getElementById('rating');
       const ratingValue = document.getElementById('rating-value');
@@ -880,7 +925,10 @@
       const logError = document.getElementById('log-error');
       document.getElementById('log-btn').addEventListener('click', async () => {
         logError.textContent = '';
-        if (!selectedTags.size) { logError.textContent = 'Pick at least one muscle group.'; return; }
+        if (!selectedTags.size) {
+          logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
+          return;
+        }
         const hours = Number(document.getElementById('hours').value) || 0;
         const minutes = Number(document.getElementById('minutes').value) || 0;
         const notes = document.getElementById('notes').value;

@@ -192,11 +192,18 @@ Every function throws an `Error` with a message that's safe to show on screen.
 - `setAvatar(file)` → uploads to Firebase Storage (images only, 8MB max), sets it as your profile picture. Requires the Blaze plan + `storage.rules` published.
 - `members(crewId)` / `watchMembers(crewId, cb)` → `[{ id, crewId, displayName, avatarUrl, color, liftMode, joinedAt }]`
   - `color`: avatars/calendar dots/weight chart are colored by a hash of each person's name, so colors are stable but arbitrary. To pin someone to a specific color (e.g. after a redesign, or because a friend group already associates colors with people), add a `color` field (hex string, e.g. `"#e0b400"`) to their `members/{uid}` document by hand in the console -- no app code change needed.
-- `setLiftMode(mode)` → `'open'` (default, freeform check-ins) or `'structured'`. In structured mode,
-  the check-in form adds a Workout A / Workout B pick once you've selected muscle groups that have a
-  template (see `js/routines.js`'s `WORKOUT_TEMPLATES`); picking one fills in that workout's `exercises`
-  for you. Muscle groups without a template (`rest`, `cardio`) are just skipped, not blocked. Set from
-  Settings (click your avatar → Settings) -- per-person, not shared across the crew.
+- `setLiftMode(mode)` → `'open'` (default) or `'structured'`. Set from Settings (click your avatar →
+  Settings) -- per-person, not shared across the crew.
+  - **open**: check-in's "What did you hit today?" step is the original freeform, multi-select muscle
+    group picker (`MUSCLE_TAGS` in `js/routines.js`).
+  - **structured**: that step becomes "What do you want to hit today?", a single-pick list of a generic
+    4-day split (`SPLIT_DAYS` in `js/routines.js`: Legs / Chest & Triceps / Back & Biceps / Shoulders &
+    Biceps) plus Cardio and Rest. Whichever one you pick sets the same underlying muscle-group tags a
+    freeform pick would, so it flows into `type`/the feed exactly the same way. Once a pick includes a
+    muscle group that has a template (i.e. not `rest`/`cardio`), a Workout A / Workout B choice appears;
+    picking one fills in that workout's `exercises` from `WORKOUT_TEMPLATES`. Edit `SPLIT_DAYS` and
+    `WORKOUT_TEMPLATES` directly in `js/routines.js` to change the split or the actual exercises/sets/reps
+    -- both are just plain data, no other code needs to change.
 
 **Workouts**
 - `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → workout (crewId is stamped from your own membership)
