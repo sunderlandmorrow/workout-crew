@@ -769,17 +769,19 @@
         liftLabelStructured.classList.toggle('active', liftMode === 'structured');
       }
       liftSwitch.addEventListener('click', async () => {
+        const previousMode = liftMode;
         const newMode = liftMode === 'open' ? 'structured' : 'open';
-        liftSwitch.disabled = true;
+        // Flip immediately so the switch feels instant; roll back only if the save fails.
+        liftMode = newMode;
+        renderLiftSwitch();
+        renderVariantSection();
         try {
           await api.setLiftMode(newMode);
-          liftMode = newMode;
+        } catch (err) {
+          liftMode = previousMode;
           renderLiftSwitch();
           renderVariantSection();
-        } catch (err) {
           window.alert(err.message);
-        } finally {
-          liftSwitch.disabled = false;
         }
       });
 
