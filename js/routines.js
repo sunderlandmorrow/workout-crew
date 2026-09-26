@@ -38,96 +38,23 @@ export const SPLIT_DAYS = [
   { id: 'shoulders-biceps-day', label: 'Shoulders & Biceps', tags: ['shoulders', 'biceps'] },
 ];
 
-// Structured Lift mode: generic proven exercise picks per muscle group, two
+// Structured Lift mode: placeholder exercise picks per muscle group, two
 // variants (A/B) to alternate between. No entry for 'rest' or 'cardio' -- there's
 // nothing to structure there, so those tags are just skipped when building a
 // structured workout's exercise list.
-export const WORKOUT_TEMPLATES = {
-  chest: {
-    A: [
-      { name: 'Barbell Bench Press', sets: 4, reps: 8 },
-      { name: 'Incline Dumbbell Press', sets: 3, reps: 10 },
-      { name: 'Cable Fly', sets: 3, reps: 12 },
-    ],
-    B: [
-      { name: 'Incline Barbell Press', sets: 4, reps: 8 },
-      { name: 'Weighted Dip', sets: 3, reps: 10 },
-      { name: 'Pec Deck', sets: 3, reps: 12 },
-    ],
-  },
-  triceps: {
-    A: [
-      { name: 'Close-Grip Bench Press', sets: 4, reps: 8 },
-      { name: 'Overhead Tricep Extension', sets: 3, reps: 10 },
-      { name: 'Tricep Pushdown', sets: 3, reps: 12 },
-    ],
-    B: [
-      { name: 'Skull Crushers', sets: 4, reps: 8 },
-      { name: 'Single-Arm Overhead Extension', sets: 3, reps: 10 },
-      { name: 'Rope Pushdown', sets: 3, reps: 12 },
-    ],
-  },
-  back: {
-    A: [
-      { name: 'Deadlift', sets: 3, reps: 5 },
-      { name: 'Pull-Up', sets: 4, reps: 8 },
-      { name: 'Barbell Row', sets: 3, reps: 10 },
-    ],
-    B: [
-      { name: 'Lat Pulldown', sets: 4, reps: 10 },
-      { name: 'Seated Cable Row', sets: 3, reps: 10 },
-      { name: 'T-Bar Row', sets: 3, reps: 10 },
-    ],
-  },
-  biceps: {
-    A: [
-      { name: 'Barbell Curl', sets: 4, reps: 8 },
-      { name: 'Hammer Curl', sets: 3, reps: 10 },
-    ],
-    B: [
-      { name: 'Incline Dumbbell Curl', sets: 4, reps: 10 },
-      { name: 'Cable Curl', sets: 3, reps: 12 },
-    ],
-  },
-  legs: {
-    A: [
-      { name: 'Back Squat', sets: 4, reps: 8 },
-      { name: 'Romanian Deadlift', sets: 3, reps: 10 },
-      { name: 'Leg Press', sets: 3, reps: 12 },
-    ],
-    B: [
-      { name: 'Front Squat', sets: 4, reps: 8 },
-      { name: 'Leg Curl', sets: 3, reps: 12 },
-      { name: 'Walking Lunge', sets: 3, reps: 12 },
-    ],
-  },
-  shoulders: {
-    A: [
-      { name: 'Overhead Press', sets: 4, reps: 8 },
-      { name: 'Lateral Raise', sets: 3, reps: 12 },
-      { name: 'Rear Delt Fly', sets: 3, reps: 12 },
-    ],
-    B: [
-      { name: 'Arnold Press', sets: 4, reps: 10 },
-      { name: 'Cable Lateral Raise', sets: 3, reps: 12 },
-      { name: 'Face Pull', sets: 3, reps: 15 },
-    ],
-  },
-  traps: {
-    A: [{ name: 'Barbell Shrug', sets: 4, reps: 10 }],
-    B: [{ name: 'Dumbbell Shrug', sets: 4, reps: 12 }],
-  },
-  abs: {
-    A: [
-      { name: 'Hanging Leg Raise', sets: 3, reps: 12 },
-      { name: 'Cable Crunch', sets: 3, reps: 15 },
-    ],
-    B: [
-      { name: 'Weighted Sit-Up', sets: 3, reps: 15 },
-      { name: 'Ab Wheel Rollout', sets: 3, reps: 10 },
-    ],
-  },
-};
+// Every muscle group gets 4 placeholder exercises per variant, 4 sets each --
+// swap "Exercise 1" etc. for real names/sets/reps whenever you're ready.
+function placeholderExercises(label) {
+  return [1, 2, 3, 4].map((n) => ({ name: `${label} Exercise ${n}`, sets: 4 }));
+}
+
+const TEMPLATED_GROUPS = ['chest', 'triceps', 'back', 'biceps', 'legs', 'shoulders', 'traps', 'abs'];
+export const WORKOUT_TEMPLATES = Object.fromEntries(
+  TEMPLATED_GROUPS.map((id) => {
+    const label = LABEL_BY_ID[id];
+    return [id, { A: placeholderExercises(label), B: placeholderExercises(label) }];
+  })
+);
 
 /** True if any selected tag has a structured-mode template (i.e. an A/B choice makes sense). */
 export function hasTemplates(tagIds) {
