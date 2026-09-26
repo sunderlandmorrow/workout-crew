@@ -115,6 +115,13 @@ signing up and land in that crew. To stop new sign-ups, delete the `inviteCodes`
 document. To let a new wave of people into the same crew, create another
 `inviteCodes` document with the same `crewId` prefix.
 
+**Known limitation:** one account = one crew. Each `members/{uid}` document holds a
+single `crewId`, so someone who wants to be in two crews needs two separate accounts
+(a different email for each), and switches between them by logging out and back in.
+This is intentional -- true multi-crew membership (one login, a crew switcher) would
+mean reworking how membership is stored and rewriting the rules functions that
+currently assume one crew per account, which wasn't worth it for this app's scale.
+
 ### 5. Connect the website to Firebase
 
 1. **Project settings** (gear icon) → **Your apps** → click the **`</>`** (Web) icon.
