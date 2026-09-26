@@ -85,6 +85,9 @@ function toMember(snap) {
     // Optional fixed avatar color, set by hand in the console (e.g. '#e0b400').
     // Falls back to a generic hash-based color when not set.
     color: d.color ?? null,
+    // 'open': freeform check-ins (default). 'structured': check-in also offers
+    // a Workout A / Workout B pick per muscle group, from js/routines.js templates.
+    liftMode: d.liftMode ?? 'open',
     joinedAt: d.joinedAt?.toDate() ?? null,
   };
 }
@@ -249,6 +252,13 @@ export const api = {
   rename: wrap(async (displayName) => {
     const user = requireUser();
     await updateDoc(doc(membersCol, user.uid), { displayName: v.displayName(displayName) });
+    return api.me();
+  }),
+
+  /** 'open' (freeform, default) or 'structured' (adds a Workout A/B pick to check-in). */
+  setLiftMode: wrap(async (mode) => {
+    const user = requireUser();
+    await updateDoc(doc(membersCol, user.uid), { liftMode: v.liftMode(mode) });
     return api.me();
   }),
 

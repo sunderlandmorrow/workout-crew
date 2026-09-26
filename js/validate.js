@@ -11,6 +11,12 @@ export function isDate(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
+const LIFT_MODES = ['open', 'structured'];
+export function liftMode(v) {
+  if (!LIFT_MODES.includes(v)) throw bad('Lift mode must be "open" or "structured"');
+  return v;
+}
+
 export function displayName(v) {
   if (typeof v !== 'string') throw bad('Please enter a name');
   const s = v.trim();

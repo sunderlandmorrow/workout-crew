@@ -96,6 +96,57 @@
       font-size: 0.55rem; display: flex; align-items: center; justify-content: center;
     }
 
+    /* ---- avatar popover + settings modal ---- */
+    .avatar-popover-wrap { position: relative; }
+    .avatar-popover {
+      display: none;
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+      background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+      padding: 6px; min-width: 140px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    .avatar-popover.open { display: block; }
+    .avatar-popover button {
+      width: 100%; text-align: left; background: none; border: none;
+      padding: 8px 10px; font-size: 0.85rem; color: var(--ink); cursor: pointer; border-radius: 4px;
+    }
+    .avatar-popover button:hover { background: var(--bg); }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.4);
+      align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-panel {
+      background: var(--card); border-radius: 8px; border: 1px solid var(--line);
+      padding: 20px; width: 100%; max-width: 380px;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-panel h2 { margin: 0 0 16px; font-size: 1rem; letter-spacing: 0.08em; }
+    .modal-section { margin-bottom: 20px; }
+    .modal-section:last-of-type { margin-bottom: 0; }
+    .modal-section-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.06em; }
+    .modal-close-row { display: flex; justify-content: flex-end; margin-top: 20px; }
+
+    .lift-toggle-row { display: flex; align-items: center; gap: 12px; }
+    .lift-toggle-label { font-size: 0.82rem; }
+    .lift-toggle-label.active { font-weight: 700; }
+    .lift-switch {
+      position: relative; width: 46px; height: 26px; flex: none;
+      border-radius: 13px; border: 1px solid var(--line);
+      background: var(--bg); cursor: pointer; padding: 0;
+    }
+    .lift-switch-knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--ink); transition: left 0.15s ease;
+    }
+    .lift-switch.on .lift-switch-knob { left: 22px; background: var(--accent); }
+    .modal-section-hint { font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+
     /* ---- dashboard header ---- */
     header.app-header {
       display: flex; justify-content: center; align-items: center;
@@ -145,6 +196,19 @@
     .duration-inputs { display: flex; align-items: center; gap: 6px; }
     .duration-inputs input { width: 60px; text-align: center; }
     .duration-labels { display: flex; gap: 24px; font-size: 0.65rem; color: var(--muted); justify-content: center; }
+    .variant-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .variant-btn {
+      flex: 1 1 120px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--ink);
+      padding: 10px 6px;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .variant-btn.selected { background: var(--ink); color: var(--bg); border-color: var(--ink); }
     .rating-col { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
     .rating-inputs { display: flex; align-items: center; gap: 10px; }
     .rating-inputs input[type="range"] {
@@ -300,7 +364,7 @@
 
   <script type="module">
     import api from './js/api.js';
-    import { MUSCLE_TAGS, tagsToType, parseType } from './js/routines.js';
+    import { MUSCLE_TAGS, tagsToType, parseType, hasTemplates, buildStructuredExercises } from './js/routines.js';
 
     const app = document.getElementById('app');
     let mode = 'login'; // 'login' | 'signup'
@@ -466,6 +530,8 @@
 
     function renderDashboard(member, crew) {
       const selectedTags = new Set();
+      let liftMode = member.liftMode || 'open';
+      let selectedVariant = null;
 
       app.innerHTML = `
         <header class="app-header">
@@ -486,15 +552,47 @@
 
         <div class="row" style="margin-bottom: 16px;">
           <div class="profile-row">
-            <button type="button" class="profile-avatar-btn" id="profile-avatar-btn" title="Change profile photo" style="background:${avatarColor(member.displayName, member.color)}">
-              <span id="profile-avatar-placeholder" style="${member.avatarUrl ? 'display:none;' : ''}">${escapeHtml(initials(member.displayName))}</span>
-              <img id="profile-avatar-img" src="${member.avatarUrl ? escapeHtml(member.avatarUrl) : ''}" style="${member.avatarUrl ? '' : 'display:none;'}" alt="Your profile photo">
-              <span class="profile-avatar-badge">📷</span>
-            </button>
+            <div class="avatar-popover-wrap">
+              <button type="button" class="profile-avatar-btn" id="profile-avatar-btn" title="Settings" style="background:${avatarColor(member.displayName, member.color)}">
+                <span id="profile-avatar-placeholder" style="${member.avatarUrl ? 'display:none;' : ''}">${escapeHtml(initials(member.displayName))}</span>
+                <img id="profile-avatar-img" src="${member.avatarUrl ? escapeHtml(member.avatarUrl) : ''}" style="${member.avatarUrl ? '' : 'display:none;'}" alt="Your profile photo">
+                <span class="profile-avatar-badge">⚙</span>
+              </button>
+              <div class="avatar-popover" id="avatar-popover">
+                <button type="button" class="caps" id="open-settings-btn">Settings</button>
+              </div>
+            </div>
             <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
             <div>Logged in as <strong>${escapeHtml(member.displayName)}</strong> <span class="points" id="my-points"></span></div>
           </div>
           <button class="link" id="signout">Log out</button>
+        </div>
+
+        <div class="modal-backdrop" id="settings-modal-backdrop">
+          <div class="modal-panel">
+            <h2 class="caps">Settings</h2>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Profile photo</div>
+              <button type="button" class="caps" id="change-photo-btn">Change photo</button>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Lift mode</div>
+              <div class="lift-toggle-row">
+                <span class="lift-toggle-label" id="lift-label-open">Open Lift</span>
+                <button type="button" class="lift-switch" id="lift-switch" role="switch">
+                  <span class="lift-switch-knob"></span>
+                </button>
+                <span class="lift-toggle-label" id="lift-label-structured">Structured Lift</span>
+              </div>
+              <div class="modal-section-hint">Structured Lift adds a Workout A / Workout B pick to check-in, with exercises filled in for the muscle groups you select.</div>
+            </div>
+
+            <div class="modal-close-row">
+              <button type="button" class="caps" id="close-settings-btn" style="width:auto; padding: 8px 18px;">Done</button>
+            </div>
+          </div>
         </div>
 
         <div class="tabs">
@@ -510,6 +608,14 @@
 
             <div class="step-label caps">1. What did you hit today?</div>
             <div class="group-row" id="group-row"></div>
+
+            <div id="variant-section" style="display:none;">
+              <div class="step-label caps">Workout A or B?</div>
+              <div class="variant-row" id="variant-row">
+                <button type="button" class="variant-btn caps" data-variant="A">Workout A</button>
+                <button type="button" class="variant-btn caps" data-variant="B">Workout B</button>
+              </div>
+            </div>
 
             <div class="bottom-row">
               <div class="notes-col">
@@ -617,7 +723,6 @@
       const avatarInput = document.getElementById('profile-avatar-input');
       const avatarImg = document.getElementById('profile-avatar-img');
       const avatarPlaceholder = document.getElementById('profile-avatar-placeholder');
-      avatarBtn.addEventListener('click', () => avatarInput.click());
       avatarInput.addEventListener('change', async () => {
         const file = avatarInput.files[0];
         if (!file) return;
@@ -632,6 +737,51 @@
         } finally {
           avatarBtn.disabled = false;
           avatarInput.value = '';
+        }
+      });
+
+      // ---- avatar popover -> Settings modal ----
+      const avatarPopover = document.getElementById('avatar-popover');
+      avatarBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        avatarPopover.classList.toggle('open');
+      });
+      document.addEventListener('click', () => avatarPopover.classList.remove('open'));
+
+      const settingsBackdrop = document.getElementById('settings-modal-backdrop');
+      function openSettings() {
+        avatarPopover.classList.remove('open');
+        renderLiftSwitch();
+        settingsBackdrop.classList.add('open');
+      }
+      function closeSettings() { settingsBackdrop.classList.remove('open'); }
+      document.getElementById('open-settings-btn').addEventListener('click', openSettings);
+      document.getElementById('close-settings-btn').addEventListener('click', closeSettings);
+      settingsBackdrop.addEventListener('click', (e) => { if (e.target === settingsBackdrop) closeSettings(); });
+
+      document.getElementById('change-photo-btn').addEventListener('click', () => avatarInput.click());
+
+      const liftSwitch = document.getElementById('lift-switch');
+      const liftLabelOpen = document.getElementById('lift-label-open');
+      const liftLabelStructured = document.getElementById('lift-label-structured');
+      function renderLiftSwitch() {
+        liftSwitch.classList.toggle('on', liftMode === 'structured');
+        liftSwitch.setAttribute('aria-checked', String(liftMode === 'structured'));
+        liftLabelOpen.classList.toggle('active', liftMode === 'open');
+        liftLabelStructured.classList.toggle('active', liftMode === 'structured');
+      }
+      liftSwitch.addEventListener('click', async () => {
+        const newMode = liftMode === 'open' ? 'structured' : 'open';
+        liftSwitch.disabled = true;
+        try {
+          await api.setLiftMode(newMode);
+          liftMode = newMode;
+          renderLiftSwitch();
+          renderVariantSection();
+        } catch (err) {
+          window.alert(err.message);
+        } finally {
+          liftSwitch.disabled = false;
         }
       });
 
@@ -697,7 +847,26 @@
         [...groupRow.children].forEach((btn) => {
           btn.classList.toggle('selected', selectedTags.has(btn.dataset.tagId));
         });
+        renderVariantSection();
       }
+
+      // ---- Structured Lift: Workout A/B picker ----
+      const variantSection = document.getElementById('variant-section');
+      const variantRow = document.getElementById('variant-row');
+      function renderVariantSection() {
+        const show = liftMode === 'structured' && hasTemplates([...selectedTags]);
+        variantSection.style.display = show ? '' : 'none';
+        if (!show) selectedVariant = null;
+        [...variantRow.children].forEach((btn) => {
+          btn.classList.toggle('selected', btn.dataset.variant === selectedVariant);
+        });
+      }
+      [...variantRow.children].forEach((btn) => {
+        btn.addEventListener('click', () => {
+          selectedVariant = selectedVariant === btn.dataset.variant ? null : btn.dataset.variant;
+          renderVariantSection();
+        });
+      });
 
       const RATING_LABELS = ['Rough', 'Tough', 'OK', 'Good', 'Crushed it'];
       const ratingInput = document.getElementById('rating');
@@ -716,6 +885,7 @@
         const minutes = Number(document.getElementById('minutes').value) || 0;
         const notes = document.getElementById('notes').value;
         const type = tagsToType([...selectedTags]);
+        const exercises = selectedVariant ? buildStructuredExercises([...selectedTags], selectedVariant) : [];
 
         const btn = document.getElementById('log-btn');
         btn.disabled = true;
@@ -726,9 +896,10 @@
             durationMin: hours * 60 + minutes,
             notes,
             rating: Number(ratingInput.value),
-            exercises: [],
+            exercises,
           });
           selectedTags.clear();
+          selectedVariant = null;
           renderGroupSelection();
           document.getElementById('notes').value = '';
           document.getElementById('hours').value = 0;

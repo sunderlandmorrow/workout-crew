@@ -187,11 +187,16 @@ Every function throws an `Error` with a message that's safe to show on screen.
 - `logout()`, `resetPassword(email)`, `currentUserId()`
 
 **Members** (all crew-scoped)
-- `me()` → `{ id, crewId, displayName, avatarUrl, email, joinedAt }`
+- `me()` → `{ id, crewId, displayName, avatarUrl, color, liftMode, email, joinedAt }`
 - `rename(displayName)`
 - `setAvatar(file)` → uploads to Firebase Storage (images only, 8MB max), sets it as your profile picture. Requires the Blaze plan + `storage.rules` published.
-- `members(crewId)` / `watchMembers(crewId, cb)` → `[{ id, crewId, displayName, avatarUrl, color, joinedAt }]`
+- `members(crewId)` / `watchMembers(crewId, cb)` → `[{ id, crewId, displayName, avatarUrl, color, liftMode, joinedAt }]`
   - `color`: avatars/calendar dots/weight chart are colored by a hash of each person's name, so colors are stable but arbitrary. To pin someone to a specific color (e.g. after a redesign, or because a friend group already associates colors with people), add a `color` field (hex string, e.g. `"#e0b400"`) to their `members/{uid}` document by hand in the console -- no app code change needed.
+- `setLiftMode(mode)` → `'open'` (default, freeform check-ins) or `'structured'`. In structured mode,
+  the check-in form adds a Workout A / Workout B pick once you've selected muscle groups that have a
+  template (see `js/routines.js`'s `WORKOUT_TEMPLATES`); picking one fills in that workout's `exercises`
+  for you. Muscle groups without a template (`rest`, `cardio`) are just skipped, not blocked. Set from
+  Settings (click your avatar → Settings) -- per-person, not shared across the crew.
 
 **Workouts**
 - `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → workout (crewId is stamped from your own membership)

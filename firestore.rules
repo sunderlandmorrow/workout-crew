@@ -70,14 +70,19 @@ service cloud.firestore {
         && u.matches('^https://firebasestorage[.]googleapis[.]com/.*');
     }
 
+    function validLiftMode(m) {
+      return m == 'open' || m == 'structured';
+    }
+
     function validProfileUpdate(uid) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let d = request.resource.data;
       return signedIn()
         && request.auth.uid == uid
-        && changed.hasOnly(['displayName', 'avatarUrl'])
+        && changed.hasOnly(['displayName', 'avatarUrl', 'liftMode'])
         && (!changed.hasAny(['displayName']) || validName(d.displayName))
-        && (!changed.hasAny(['avatarUrl']) || validAvatarUrl(d.avatarUrl));
+        && (!changed.hasAny(['avatarUrl']) || validAvatarUrl(d.avatarUrl))
+        && (!changed.hasAny(['liftMode']) || validLiftMode(d.liftMode));
     }
 
     match /members/{uid} {

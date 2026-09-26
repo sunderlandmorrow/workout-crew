@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { addDays, computeStreaks, buildLeaderboard, makeSortKey } from '../js/stats.js';
 import * as v from '../js/validate.js';
+import { hasTemplates, buildStructuredExercises } from '../js/routines.js';
 
 test('addDays crosses months and years', () => {
   assert.equal(addDays('2026-02-28', 1), '2026-03-01');
@@ -97,4 +98,29 @@ test('names and invite codes', () => {
   assert.throws(() => v.inviteCode('bad/code!!_1234'));   // would break the rules path
   assert.equal(v.crewIdFromInviteCode('lift-crew_8431'), 'lift-crew');
   assert.throws(() => v.crewIdFromInviteCode('not-a-valid-code'));
+});
+
+test('lift mode', () => {
+  assert.equal(v.liftMode('open'), 'open');
+  assert.equal(v.liftMode('structured'), 'structured');
+  assert.throws(() => v.liftMode('sometimes'));
+  assert.throws(() => v.liftMode(undefined));
+});
+
+test('structured lift templates', () => {
+  assert.equal(hasTemplates(['chest', 'triceps']), true);
+  assert.equal(hasTemplates(['rest']), false);
+  assert.equal(hasTemplates(['cardio']), false);
+
+  const chestTricepsA = buildStructuredExercises(['chest', 'triceps'], 'A');
+  assert.ok(chestTricepsA.length > 0);
+  assert.ok(chestTricepsA.every((e) => typeof e.name === 'string' && e.sets > 0 && e.reps > 0));
+
+  // Skips tags with no template instead of throwing.
+  assert.deepEqual(buildStructuredExercises(['rest', 'cardio'], 'A'), []);
+
+  // A and B are different workouts for the same muscle group.
+  const chestA = buildStructuredExercises(['chest'], 'A').map((e) => e.name);
+  const chestB = buildStructuredExercises(['chest'], 'B').map((e) => e.name);
+  assert.notDeepEqual(chestA, chestB);
 });
