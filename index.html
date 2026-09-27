@@ -303,8 +303,14 @@
       border-radius: 4px;
       padding: 4px;
       font-size: 0.7rem;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
     }
-    .cal-cell.empty { border: none; }
+    .cal-cell.empty { border: none; cursor: default; }
+    .cal-cell.selected { border-color: var(--ink); border-width: 2px; padding: 3px; }
     .cal-daynum { color: var(--muted); }
     .cal-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
     .cal-dot {
@@ -312,6 +318,9 @@
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-size: 0.55rem; font-weight: 700;
     }
+    .cal-day-detail { margin-top: 16px; }
+    .cal-day-detail-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 8px; }
+    .cal-day-detail-hint { font-size: 0.72rem; color: var(--muted); margin-top: 10px; }
 
     /* ---- weight ---- */
     .weight-form { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 20px; }
@@ -682,6 +691,49 @@
               <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
             </div>
             <div class="cal-grid" id="cal-grid"></div>
+            <div class="cal-day-detail" id="cal-day-detail"></div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop" id="add-workout-backdrop">
+          <div class="modal-panel">
+            <h2 class="caps">Add a workout</h2>
+            <div class="modal-section-label caps" id="add-workout-date-label"></div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Muscle groups</div>
+              <div class="group-row" id="add-workout-group-row"></div>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Notes</div>
+              <textarea id="add-workout-notes" placeholder="Optional" maxlength="1000"></textarea>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Duration</div>
+              <div class="duration-inputs">
+                <input type="number" id="add-workout-hours" min="0" max="24" value="0">
+                <span>:</span>
+                <input type="number" id="add-workout-minutes" min="0" max="59" value="0">
+              </div>
+              <div class="duration-labels caps"><span>Hours</span><span>Minutes</span></div>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">How did it feel?</div>
+              <div class="rating-inputs">
+                <input type="range" id="add-workout-rating" min="1" max="5" step="1" value="3">
+                <span class="rating-value" id="add-workout-rating-value"></span>
+              </div>
+            </div>
+
+            <p class="error" id="add-workout-error"></p>
+
+            <div class="modal-close-row" style="justify-content: space-between;">
+              <button type="button" class="link" id="add-workout-cancel-btn">Cancel</button>
+              <button type="button" class="caps" id="add-workout-save-btn" style="width:auto; padding: 8px 18px;">Log workout</button>
+            </div>
           </div>
         </div>
 
@@ -1006,6 +1058,31 @@
         return `<div class="avatar" style="background:${bg}">${escapeHtml(initials(name))}</div>`;
       }
 
+      // Shared by today's feed and the calendar's day-detail view.
+      function feedRowHtml(w, byId) {
+        const person = byId[w.userId];
+        const name = person ? person.displayName : 'Someone';
+        const { label } = parseType(w.type);
+        const time = w.createdAt
+          ? w.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+          : '';
+        const exercisesLine = w.exercises && w.exercises.length
+          ? w.exercises.map((e) => `${escapeHtml(e.name)}${e.sets ? ` x${e.sets}` : ''}`).join(', ')
+          : '';
+        return `
+          <div class="feed-row">
+            ${avatarHtml(name, w.userId)}
+            <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
+            <div class="feed-meta">${escapeHtml(label)}</div>
+            <div class="feed-meta">${formatDuration(w.durationMin)}</div>
+            <div class="feed-meta">${w.rating ? '★'.repeat(w.rating) + '☆'.repeat(5 - w.rating) : ''}</div>
+            <div class="feed-notes">${escapeHtml(w.notes || '')}</div>
+            <div class="feed-time">${escapeHtml(time)}</div>
+            ${exercisesLine ? `<div class="feed-exercises">${exercisesLine}</div>` : ''}
+          </div>
+        `;
+      }
+
       function renderFeed() {
         const byId = Object.fromEntries(members.map((m) => [m.id, m]));
         const list = document.getElementById('feed-list');
@@ -1017,29 +1094,7 @@
           list.innerHTML = '<p class="empty">No check-ins yet today.</p>';
           return;
         }
-        list.innerHTML = todaysWorkouts.map((w) => {
-          const person = byId[w.userId];
-          const name = person ? person.displayName : 'Someone';
-          const { label } = parseType(w.type);
-          const time = w.createdAt
-            ? w.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-            : '';
-          const exercisesLine = w.exercises && w.exercises.length
-            ? w.exercises.map((e) => `${escapeHtml(e.name)}${e.sets ? ` x${e.sets}` : ''}`).join(', ')
-            : '';
-          return `
-            <div class="feed-row">
-              ${avatarHtml(name, w.userId)}
-              <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
-              <div class="feed-meta">${escapeHtml(label)}</div>
-              <div class="feed-meta">${formatDuration(w.durationMin)}</div>
-              <div class="feed-meta">${w.rating ? '★'.repeat(w.rating) + '☆'.repeat(5 - w.rating) : ''}</div>
-              <div class="feed-notes">${escapeHtml(w.notes || '')}</div>
-              <div class="feed-time">${escapeHtml(time)}</div>
-              ${exercisesLine ? `<div class="feed-exercises">${exercisesLine}</div>` : ''}
-            </div>
-          `;
-        }).join('');
+        list.innerHTML = todaysWorkouts.map((w) => feedRowHtml(w, byId)).join('');
       }
 
       const unwatchMembers = api.watchMembers(member.crewId, (m) => { members = m; renderFeed(); });
@@ -1135,8 +1190,38 @@
       const CAL_START_YEAR = calState.year, CAL_START_MONTH = calState.month; // don't allow browsing before now
       const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
+      const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const pad2 = (n) => String(n).padStart(2, '0');
       const firstInitial = (name) => (String(name || '?').trim()[0] || '?').toUpperCase();
+      let calSelectedDate = null;
+
+      function formatDateLong(dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        return `${WEEKDAY_NAMES[dt.getUTCDay()]}, ${MONTH_NAMES[m - 1]} ${d}, ${y}`;
+      }
+
+      // Fires onClick on a normal tap/click, onLongPress if held past `delay` ms
+      // without releasing -- used so a calendar day can do two different things.
+      function attachPressHandlers(el, { onClick, onLongPress, delay = 500 }) {
+        let timer = null;
+        let firedLongPress = false;
+        const start = (e) => {
+          if (e.button !== undefined && e.button !== 0) return;
+          firedLongPress = false;
+          timer = setTimeout(() => { firedLongPress = true; onLongPress(); }, delay);
+        };
+        const cancel = () => { clearTimeout(timer); };
+        const end = () => {
+          clearTimeout(timer);
+          if (!firedLongPress) onClick();
+        };
+        el.addEventListener('pointerdown', start);
+        el.addEventListener('pointerup', end);
+        el.addEventListener('pointerleave', cancel);
+        el.addEventListener('pointercancel', cancel);
+        el.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
 
       async function fetchAllWorkouts(filters = {}) {
         let cursor = null;
@@ -1160,14 +1245,18 @@
         const to = `${year}-${pad2(month + 1)}-${pad2(lastDay)}`;
 
         const byId = Object.fromEntries(members.map((m) => [m.id, m]));
-        const workouts = (await fetchAllWorkouts({ from, to })).filter((w) => w.type !== 'rest');
+        const allWorkouts = await fetchAllWorkouts({ from, to });
+        const workouts = allWorkouts.filter((w) => w.type !== 'rest');
 
         const byDate = {};
+        const allByDate = {};
         const rawCounts = {};
         workouts.forEach((w) => {
           (byDate[w.performedOn] ??= new Set()).add(w.userId);
           rawCounts[w.userId] = (rawCounts[w.userId] || 0) + 1;
         });
+        allWorkouts.forEach((w) => { (allByDate[w.performedOn] ??= []).push(w); });
+
         document.getElementById('cal-total').textContent = 'Workouts logged this month:';
         document.getElementById('cal-breakdown').innerHTML = [...members]
           .sort((a, b) => (rawCounts[b.id] || 0) - (rawCounts[a.id] || 0))
@@ -1177,6 +1266,21 @@
               ${escapeHtml(m.displayName)}: ${rawCounts[m.id] || 0}
             </span>
           `).join('');
+
+        const detailEl = document.getElementById('cal-day-detail');
+        function renderDayDetail(dateStr) {
+          calSelectedDate = dateStr;
+          [...grid.children].forEach((cell) => cell.classList.toggle('selected', cell.dataset.date === dateStr));
+          const dayWorkouts = allByDate[dateStr] || [];
+          const heading = `<div class="cal-day-detail-title">${escapeHtml(formatDateLong(dateStr))}</div>`;
+          const rows = dayWorkouts.length
+            ? dayWorkouts.map((w) => feedRowHtml(w, byId)).join('')
+            : '<p class="empty">No check-ins that day.</p>';
+          const hint = dateStr <= api.today()
+            ? '<div class="cal-day-detail-hint">Press and hold a day to add a missed workout.</div>'
+            : '';
+          detailEl.innerHTML = heading + rows + hint;
+        }
 
         const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
         const cells = [];
@@ -1188,7 +1292,7 @@
             return `<div class="cal-dot" style="background:${avatarColor(name, byId[id]?.color)}">${escapeHtml(firstInitial(name))}</div>`;
           }).join('');
           cells.push(`
-            <div class="cal-cell">
+            <div class="cal-cell" data-date="${dateStr}">
               <div class="cal-daynum">${day}</div>
               <div class="cal-dots">${dots}</div>
             </div>
@@ -1197,6 +1301,24 @@
         grid.innerHTML = cells.join('');
         document.getElementById('cal-next').disabled = atCompetitionCap();
         document.getElementById('cal-prev').disabled = atStartCap();
+
+        [...grid.children].forEach((cell) => {
+          if (cell.classList.contains('empty')) return;
+          const dateStr = cell.dataset.date;
+          attachPressHandlers(cell, {
+            onClick: () => renderDayDetail(dateStr),
+            onLongPress: () => {
+              if (dateStr > api.today()) { window.alert("Can't log a workout for a future day."); return; }
+              openAddWorkoutModal(dateStr);
+            },
+          });
+        });
+
+        if (calSelectedDate && calSelectedDate >= from && calSelectedDate <= to) {
+          renderDayDetail(calSelectedDate);
+        } else {
+          detailEl.innerHTML = '';
+        }
       }
 
       // Falls back to two years out if this crew has no competition date set.
@@ -1220,6 +1342,84 @@
         calState.month += 1;
         if (calState.month > 11) { calState.month = 0; calState.year += 1; }
         loadCalendarMonth();
+      });
+
+      // ---- add a missed workout (long-press a calendar day) ----
+      const addWorkoutTags = new Set();
+      const addWorkoutBackdrop = document.getElementById('add-workout-backdrop');
+      const addWorkoutGroupRow = document.getElementById('add-workout-group-row');
+      const addWorkoutError = document.getElementById('add-workout-error');
+      const addWorkoutRating = document.getElementById('add-workout-rating');
+      const addWorkoutRatingValue = document.getElementById('add-workout-rating-value');
+      let addWorkoutDate = null;
+
+      MUSCLE_TAGS.forEach((tag) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'group-btn caps';
+        btn.textContent = tag.label;
+        btn.dataset.tagId = tag.id;
+        btn.addEventListener('click', () => {
+          if (tag.id === 'rest') {
+            addWorkoutTags.clear();
+            addWorkoutTags.add('rest');
+          } else {
+            addWorkoutTags.delete('rest');
+            if (addWorkoutTags.has(tag.id)) addWorkoutTags.delete(tag.id);
+            else addWorkoutTags.add(tag.id);
+          }
+          [...addWorkoutGroupRow.children].forEach((b) => b.classList.toggle('selected', addWorkoutTags.has(b.dataset.tagId)));
+        });
+        addWorkoutGroupRow.appendChild(btn);
+      });
+
+      function renderAddWorkoutRatingValue() {
+        addWorkoutRatingValue.textContent = `${addWorkoutRating.value} — ${RATING_LABELS[Number(addWorkoutRating.value) - 1]}`;
+      }
+      addWorkoutRating.addEventListener('input', renderAddWorkoutRatingValue);
+
+      function openAddWorkoutModal(dateStr) {
+        addWorkoutDate = dateStr;
+        addWorkoutTags.clear();
+        [...addWorkoutGroupRow.children].forEach((b) => b.classList.remove('selected'));
+        document.getElementById('add-workout-notes').value = '';
+        document.getElementById('add-workout-hours').value = 0;
+        document.getElementById('add-workout-minutes').value = 0;
+        addWorkoutRating.value = 3;
+        renderAddWorkoutRatingValue();
+        addWorkoutError.textContent = '';
+        document.getElementById('add-workout-date-label').textContent = formatDateLong(dateStr);
+        addWorkoutBackdrop.classList.add('open');
+      }
+      function closeAddWorkoutModal() { addWorkoutBackdrop.classList.remove('open'); }
+
+      document.getElementById('add-workout-cancel-btn').addEventListener('click', closeAddWorkoutModal);
+      addWorkoutBackdrop.addEventListener('click', (e) => { if (e.target === addWorkoutBackdrop) closeAddWorkoutModal(); });
+
+      document.getElementById('add-workout-save-btn').addEventListener('click', async () => {
+        addWorkoutError.textContent = '';
+        if (!addWorkoutTags.size) { addWorkoutError.textContent = 'Pick at least one muscle group.'; return; }
+        const hours = Number(document.getElementById('add-workout-hours').value) || 0;
+        const minutes = Number(document.getElementById('add-workout-minutes').value) || 0;
+        const notes = document.getElementById('add-workout-notes').value;
+        const btn = document.getElementById('add-workout-save-btn');
+        btn.disabled = true;
+        try {
+          await api.logWorkout({
+            performedOn: addWorkoutDate,
+            type: tagsToType([...addWorkoutTags]),
+            durationMin: hours * 60 + minutes,
+            notes,
+            rating: Number(addWorkoutRating.value),
+            exercises: [],
+          });
+          closeAddWorkoutModal();
+          loadCalendarMonth();
+        } catch (err) {
+          addWorkoutError.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
       });
 
       // ---- monthly weigh-in ----
