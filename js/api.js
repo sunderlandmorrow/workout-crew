@@ -327,14 +327,15 @@ export const api = {
 
   /** input: { performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? }
    *  exercises: [{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }]
-   *  Posts one independent copy into your home crew and each crew you've linked
-   *  (see joinAdditionalCrew()) -- returns the home-crew copy. */
-  logWorkout: wrap(async (input) => {
+   *  By default posts one independent copy into your home crew and each crew
+   *  you've linked (see joinAdditionalCrew()). Pass { crewId } to post to just
+   *  that one crew instead. Returns the first copy written. */
+  logWorkout: wrap(async (input, { crewId: onlyCrewId } = {}) => {
     const user = requireUser();
     const member = await api.me();
     if (!member) throw new Error('Join the crew first');
     const w = v.workout(input);
-    const crewIds = [member.crewId, ...(await linkedCrewIds(user.uid))];
+    const crewIds = onlyCrewId ? [onlyCrewId] : [member.crewId, ...(await linkedCrewIds(user.uid))];
     const refs = await Promise.all(crewIds.map((crewId) => addDoc(workoutsCol, {
       userId: user.uid,
       crewId,
@@ -403,15 +404,16 @@ export const api = {
 
   // ---- chat ----
 
-  /** One shared, permanent channel per crew. */
-  sendMessage: wrap(async (text) => {
+  /** One shared, permanent channel per crew. crewId defaults to your home crew;
+   *  pass the crew you're currently viewing to chat there instead. */
+  sendMessage: wrap(async (text, crewId) => {
     const user = requireUser();
     const member = await api.me();
     if (!member) throw new Error('Join the crew first');
     const msg = v.chatMessage(text);
     await addDoc(messagesCol, {
       userId: user.uid,
-      crewId: member.crewId,
+      crewId: crewId || member.crewId,
       displayName: member.displayName,
       text: msg,
       createdAt: serverTimestamp(),
@@ -419,19 +421,20 @@ export const api = {
   }),
 
   /** Share a photo, with an optional caption, to the crew chat. Max 8MB, images only. */
-  sendPhoto: wrap(async (file, caption = '') => {
+  sendPhoto: wrap(async (file, caption = '', crewId) => {
     const user = requireUser();
     const member = await api.me();
     if (!member) throw new Error('Join the crew first');
     if (!file.type.startsWith('image/')) throw new v.ValidationError('Only images can be shared');
     if (file.size > 8 * 1024 * 1024) throw new v.ValidationError('Image must be under 8MB');
-    const path = `chatImages/${member.crewId}/${user.uid}/${Date.now()}_${file.name}`;
+    const targetCrewId = crewId || member.crewId;
+    const path = `chatImages/${targetCrewId}/${user.uid}/${Date.now()}_${file.name}`;
     const sref = storageRef(storage, path);
     await uploadBytes(sref, file, { contentType: file.type });
     const imageUrl = await getDownloadURL(sref);
     await addDoc(messagesCol, {
       userId: user.uid,
-      crewId: member.crewId,
+      crewId: targetCrewId,
       displayName: member.displayName,
       text: String(caption || '').trim().slice(0, 2000),
       imageUrl,
@@ -452,7 +455,8 @@ export const api = {
   currentMonth: localMonth,
 
   /** One weigh-in per person per calendar month; can't be changed once logged.
-   *  A progress photo is required alongside the weight. */
+   *  A progress photo is required alongside the weight. Posts one independent copy
+   *  into your home crew and each crew you've linked, reusing the same photo. */
   logWeight: wrap(async (weight, photoFile) => {
     const user = requireUser();
     const member = await api.me();
@@ -462,23 +466,32 @@ export const api = {
     if (!photoFile.type.startsWith('image/')) throw new v.ValidationError('Only images can be uploaded');
     if (photoFile.size > 8 * 1024 * 1024) throw new v.ValidationError('Photo must be under 8MB');
     const month = localMonth();
+    const crewIds = [member.crewId, ...(await linkedCrewIds(user.uid))];
+    // One upload, filed under the home crew's folder -- storage rules already let
+    // every crew you're in read from there via isCrewMember()'s crewLinks check.
     const sref = storageRef(storage, `progressPhotos/${member.crewId}/${user.uid}/${month}_${Date.now()}`);
     await uploadBytes(sref, photoFile, { contentType: photoFile.type });
     const photoUrl = await getDownloadURL(sref);
     try {
-      await setDoc(doc(weightsCol, `${user.uid}_${month}`), {
-        userId: user.uid, crewId: member.crewId, month, weight: w, photoUrl, createdAt: serverTimestamp(),
-      });
+      await Promise.all(crewIds.map((crewId) => setDoc(doc(weightsCol, `${user.uid}_${month}_${crewId}`), {
+        userId: user.uid, crewId, month, weight: w, photoUrl, createdAt: serverTimestamp(),
+      })));
     } catch (err) {
       if (err.code === 'permission-denied') throw new Error("You've already logged your weight this month");
       throw err;
     }
   }),
 
-  myWeightThisMonth: wrap(async () => {
+  /** crewId defaults to your home crew. */
+  myWeightThisMonth: wrap(async (crewId) => {
     const user = requireUser();
-    const snap = await getDoc(doc(weightsCol, `${user.uid}_${localMonth()}`));
-    return snap.exists() ? toWeight(snap) : null;
+    const member = await api.me();
+    const month = localMonth();
+    const snap = await getDoc(doc(weightsCol, `${user.uid}_${month}_${crewId || member?.crewId}`));
+    if (snap.exists()) return toWeight(snap);
+    // Fall back to the pre-fan-out doc id, for a weigh-in logged before this shipped.
+    const legacySnap = await getDoc(doc(weightsCol, `${user.uid}_${month}`));
+    return legacySnap.exists() ? toWeight(legacySnap) : null;
   }),
 
   /** Live list of every weigh-in ever logged in a crew, newest month first. */

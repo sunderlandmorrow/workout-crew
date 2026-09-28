@@ -115,18 +115,34 @@ signing up and land in that crew. To stop new sign-ups, delete the `inviteCodes`
 document. To let a new wave of people into the same crew, create another
 `inviteCodes` document with the same `crewId` prefix.
 
-**Your home crew is still one account = one crew.** Each `members/{uid}` document
-holds a single `crewId`, and that's what chat, weigh-ins, the countdown, and the
-brand name in the header all key off. Switching your *home* crew still means a
-second account.
+**One account can be in multiple crews.** Each `members/{uid}` document still
+holds a single `crewId` -- your "home" crew, whose invite code you signed up
+with -- but Settings (click your avatar → Settings) has an "Also post workouts
+to another crew" field where you can link additional crews by their Crew ID,
+backed by `crewLinks/{uid}_{crewId}` docs (create-only, same shape/validation
+as joining your first crew).
 
-**But you can also post workouts into other crews without a second account.**
-Settings (click your avatar → Settings) has an "Also post workouts to another
-crew" field -- enter another crew's Crew ID there and every `logWorkout()` call
-from then on writes one independent copy into your home crew *and* each crew
-you've linked (see `crewLinks` in the API reference). Each crew only ever sees
-its own copy -- there's no cross-crew visibility into chat, members, or anything
-else, just your own workouts showing up in more than one place.
+Once you're linked to more than one crew, a **crew switcher** appears at the
+top of the dashboard -- tap a crew's name to view *that* crew's whole
+dashboard (feed, calendar, chat, weigh-ins, brand, countdown) instead of your
+home crew's. `logWorkout()` defaults to posting one independent copy into
+every crew you're in; the check-in form also grows a "Post to" dropdown once
+you're multi-crew, letting you target just one instead. Weigh-ins fan out the
+same way (one photo upload, one Firestore doc per crew, so `weights/{uid}_{month}_{crewId}`
+replaces the old `weights/{uid}_{month}` id). Chat messages you send always go
+to whichever crew you're currently viewing, not a fan-out.
+
+Each crew still only ever sees *its own* copy of anything -- crews remain
+fully isolated from each other; being in both just means *you* can see and
+post to both, not that the crews can see each other.
+
+**Known gap:** a multi-crew person's avatar is only stored once, under their
+home crew's Storage folder (`storage.rules`' `isCrewMember()` does account for
+crewLinks, so anyone who has *that* crew linked can still read it) -- but a
+regular member of a crew they've cross-posted into, who has never linked that
+poster's home crew, can't read the file and just sees initials instead. Their
+workouts/messages still show up fine; it's purely the photo. Low priority
+since it degrades gracefully.
 
 ### 5. Connect the website to Firebase
 
@@ -216,10 +232,12 @@ Every function throws an `Error` with a message that's safe to show on screen.
     -- both are just plain data, no other code needs to change.
 
 **Workouts**
-- `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → the home-crew workout.
-  Also writes one independent copy into each crew from `myCrewLinks()`, if any.
+- `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? }, { crewId? })` →
+  the first copy written. By default posts one independent copy into your home crew and every crew
+  from `myCrewLinks()`; pass `{ crewId }` to post to just that one crew instead.
   - `exercises`: `[{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }]`
-- `updateWorkout(id, { ...any of the above })`, `deleteWorkout(id)` (own workouts only)
+- `updateWorkout(id, { ...any of the above })`, `deleteWorkout(id)` (own workouts only -- acts on
+  whichever crew's copy `id` belongs to, doesn't touch the others)
 - `getWorkout(id)`
 - `feed({ crewId, userId?, from?, to?, type?, pageSize?, cursor? })` → `{ workouts, cursor }`;
   pass `cursor` back to load the next page (null means no more)
@@ -234,14 +252,17 @@ A workout looks like:
 **Kudos**: `kudos(id)`, `unkudos(id)`
 
 **Chat**: one shared channel per crew, permanent history.
-- `sendMessage(text)`
-- `sendPhoto(file, caption?)` → uploads to Firebase Storage (images only, 8MB max), posts with the caption. Requires the Blaze plan + `storage.rules` published.
+- `sendMessage(text, crewId?)` → crewId defaults to your home crew; pass the crew you're currently viewing to chat there instead.
+- `sendPhoto(file, caption?, crewId?)` → uploads to Firebase Storage (images only, 8MB max), posts with the caption. Requires the Blaze plan + `storage.rules` published.
 - `watchChat(crewId, callback, onError?)` → cb gets `[{ id, userId, displayName, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
 
 **Monthly weigh-in**: one entry per person per calendar month, can't be changed once logged.
 - `currentMonth()` → `'YYYY-MM'`
-- `logWeight(weight)` (lb)
-- `myWeightThisMonth()` → `{ id, userId, month, weight, createdAt }` or `null`
+- `logWeight(weight)` (lb) → fans out the same way `logWorkout` does: one photo upload, one
+  `weights/{uid}_{month}_{crewId}` doc per crew you're in.
+- `myWeightThisMonth(crewId?)` → `{ id, userId, month, weight, createdAt }` or `null`. crewId defaults
+  to your home crew; falls back to the pre-fan-out `{uid}_{month}` doc id for anything logged before
+  this shipped.
 - `watchWeights(crewId, callback, onError?)` → cb gets every weigh-in ever logged in that crew, newest month first. Returns an unsubscribe function.
 
 **Leaderboard**: `stats(crewId, days = 7)` →

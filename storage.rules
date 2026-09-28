@@ -11,11 +11,13 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.crewId;
     }
 
-    // You're in this crew once you have a members/{yourUid} document with a matching crewId.
+    // You're in this crew once you have a members/{yourUid} document, and it's either
+    // your home crew or one you've linked via a crewLinks/{uid}_{crewId} doc.
     function isCrewMember(crewId) {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid))
-        && myCrewId() == crewId;
+        && (myCrewId() == crewId
+          || firestore.exists(/databases/(default)/documents/crewLinks/$(request.auth.uid + '_' + crewId)));
     }
 
     // Chat photos: only the uploader can write to their own folder, images only, 8MB cap.
