@@ -20,7 +20,7 @@ import {
 
 import { firebaseConfig } from './firebase-config.js';
 import * as v from './validate.js';
-import { addDays, localToday, localMonth, makeSortKey, buildLeaderboard } from './stats.js';
+import { addDays, localToday, localMonth, makeSortKey, buildLeaderboard, totalPoints } from './stats.js';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -95,7 +95,13 @@ function toMember(snap) {
 
 function toCrew(snap) {
   const d = snap.data();
-  return { id: snap.id, name: d.name, competitionDate: d.competitionDate ?? null, memberCount: d.memberCount ?? 0 };
+  return {
+    id: snap.id,
+    name: d.name,
+    competitionDate: d.competitionDate ?? null,
+    memberCount: d.memberCount ?? 0,
+    totalPoints: d.totalPoints ?? 0,
+  };
 }
 
 function toMessage(snap) {
@@ -281,13 +287,17 @@ export const api = {
     return snap.docs.map(toCrew);
   }),
 
-  /** Recomputes and saves crewId's member count, from a query only its own
-   *  members can run. Call this occasionally (e.g. on dashboard load) to keep
-   *  allCrews()'s counts from drifting. */
-  refreshCrewMemberCount: wrap(async (crewId) => {
+  /** Recomputes and saves crewId's member count and total points, from queries
+   *  only its own members can run. Call this occasionally (e.g. on dashboard
+   *  load) to keep allCrews()'s numbers from drifting. */
+  refreshCrewStats: wrap(async (crewId) => {
     requireUser();
-    const snap = await getDocs(query(membersCol, where('crewId', '==', crewId)));
-    await updateDoc(doc(crewsCol, crewId), { memberCount: snap.size });
+    const [membersSnap, workoutsSnap] = await Promise.all([
+      getDocs(query(membersCol, where('crewId', '==', crewId))),
+      getDocs(query(workoutsCol, where('crewId', '==', crewId))),
+    ]);
+    const workouts = workoutsSnap.docs.map((d) => d.data());
+    await updateDoc(doc(crewsCol, crewId), { memberCount: membersSnap.size, totalPoints: totalPoints(workouts) });
   }),
 
   login: wrap(async (email, password) => {

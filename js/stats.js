@@ -21,6 +21,13 @@ export function makeSortKey(performedOn, createdIso = new Date().toISOString()) 
   return `${performedOn}_${createdIso}`;
 }
 
+// Points: flat per logged workout, rest days don't count. Shared so a person's
+// point total and a crew's total points always agree on the same formula.
+export const POINTS_PER_WORKOUT = 10;
+export function totalPoints(workouts) {
+  return workouts.filter((w) => w.type !== 'rest').length * POINTS_PER_WORKOUT;
+}
+
 // datesDesc: distinct workout dates, newest first.
 // A current streak is alive if the latest workout was today or yesterday.
 export function computeStreaks(datesDesc, today) {

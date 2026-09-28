@@ -1,7 +1,7 @@
 // Run with: node test/logic.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { addDays, computeStreaks, buildLeaderboard, makeSortKey } from '../js/stats.js';
+import { addDays, computeStreaks, buildLeaderboard, makeSortKey, totalPoints } from '../js/stats.js';
 import * as v from '../js/validate.js';
 import { hasTemplates, buildStructuredExercises } from '../js/routines.js';
 
@@ -60,6 +60,12 @@ test('leaderboard', () => {
   assert.equal(a.activeDays, 1); assert.equal(a.workouts, 2); assert.equal(a.minutes, 50);
   assert.equal(a.lastWorkoutOn, '2026-09-15');
   assert.equal(c.workouts, 0); assert.equal(c.lastWorkoutOn, null);
+});
+
+test('points', () => {
+  assert.equal(totalPoints([]), 0);
+  assert.equal(totalPoints([{ type: 'lift' }, { type: 'run' }]), 20);
+  assert.equal(totalPoints([{ type: 'lift' }, { type: 'rest' }]), 10); // rest doesn't count
 });
 
 test('workout validation', () => {

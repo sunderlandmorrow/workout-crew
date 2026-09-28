@@ -211,14 +211,17 @@ Every function throws an `Error` with a message that's safe to show on screen.
   your account (doesn't change your home crew) so your future `logWorkout()` calls also post a copy
   there. Backed by a `crewLinks/{uid}_{crewId}` doc, created once per link, create-only in the rules.
 - `myCrewLinks()` → `[{ id, name, competitionDate }]`, the crews you've linked via `joinAdditionalCrew`.
-- `allCrews()` → `[{ id, name, competitionDate, memberCount }]`, every crew that exists, for the
-  "Workout Crews" browse tab. Crew names/counts aren't treated as sensitive (unlike members/workouts/
-  chat/weigh-ins, which stay fully isolated) -- any signed-in member can list them.
-- `refreshCrewMemberCount(crewId)` → recomputes and saves that crew's `memberCount` from its actual
-  member list. You can only do this for a crew you're in (home or linked), since it's the only
-  membership query the rules let you run. The dashboard calls this for its active crew on every load,
-  so counts drift at most a little -- `scripts/backfill-crew-member-counts.mjs` force-resyncs all of
-  them at once if you want it exact right now.
+- `getCrew(crewId)` → `{ id, name, competitionDate, memberCount, totalPoints }` or `null`.
+- `allCrews()` → same shape as `getCrew`, every crew that exists, for the "Workout Crews" browse tab
+  (ranked by `totalPoints` there, most active crew first). Crew names/counts aren't treated as
+  sensitive (unlike members/workouts/chat/weigh-ins, which stay fully isolated) -- any signed-in
+  member can list them.
+- `refreshCrewStats(crewId)` → recomputes and saves that crew's `memberCount` and `totalPoints`
+  (10 per logged workout, same formula as a person's own point total -- `js/stats.js`'s
+  `totalPoints()`) from queries only its own members can run. You can only do this for a crew you're
+  in (home or linked). The dashboard calls this for its active crew on every load, so the numbers
+  drift at most a little -- `scripts/backfill-crew-stats.mjs` force-resyncs every crew at once if you
+  want them exact right now.
 
 **Members** (all crew-scoped)
 - `me()` → `{ id, crewId, displayName, avatarUrl, color, liftMode, email, joinedAt }`
