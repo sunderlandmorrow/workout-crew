@@ -256,7 +256,13 @@ export const api = {
     return api.myCrewLinks();
   }),
 
-  /** Crews you've linked in addition to your home crew, via joinAdditionalCrew(). */
+  getCrew: wrap(async (crewId) => {
+    const snap = await getDoc(doc(crewsCol, crewId));
+    return snap.exists() ? toCrew(snap) : null;
+  }),
+
+  /** Crews you've linked in addition to your home crew, via joinAdditionalCrew().
+   *  Never includes your home crew itself. */
   myCrewLinks: wrap(async () => {
     const user = requireUser();
     const crewIds = await linkedCrewIds(user.uid);

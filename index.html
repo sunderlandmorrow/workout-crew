@@ -820,8 +820,15 @@
         renderDashboard(member, targetCrew);
       }
       async function loadMyCrews() {
-        const links = await api.myCrewLinks();
-        myCrews = [crew, ...links];
+        // myCrewLinks() never includes the home crew, but `crew` (the currently
+        // active one) might BE a linked crew, not home -- always resolve the true
+        // home crew explicitly so it can't end up duplicated (as `crew`) while
+        // also being missing (since links never lists it).
+        const [homeCrew, links] = await Promise.all([
+          crew.id === member.crewId ? crew : api.getCrew(member.crewId),
+          api.myCrewLinks(),
+        ]);
+        myCrews = [homeCrew, ...links];
         const switcher = document.getElementById('crew-switcher');
         if (myCrews.length > 1) {
           switcher.style.display = '';
