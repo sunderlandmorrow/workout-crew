@@ -95,7 +95,7 @@ function toMember(snap) {
 
 function toCrew(snap) {
   const d = snap.data();
-  return { id: snap.id, name: d.name, competitionDate: d.competitionDate ?? null };
+  return { id: snap.id, name: d.name, competitionDate: d.competitionDate ?? null, memberCount: d.memberCount ?? 0 };
 }
 
 function toMessage(snap) {
@@ -265,6 +265,23 @@ export const api = {
       return crewSnap.exists() ? toCrew(crewSnap) : null;
     }));
     return crews.filter(Boolean);
+  }),
+
+  /** Every crew that exists, for browsing (crew names/counts aren't sensitive --
+   *  only members/workouts/chat/weigh-ins are isolated per crew). */
+  allCrews: wrap(async () => {
+    requireUser();
+    const snap = await getDocs(query(crewsCol, orderBy('name')));
+    return snap.docs.map(toCrew);
+  }),
+
+  /** Recomputes and saves crewId's member count, from a query only its own
+   *  members can run. Call this occasionally (e.g. on dashboard load) to keep
+   *  allCrews()'s counts from drifting. */
+  refreshCrewMemberCount: wrap(async (crewId) => {
+    requireUser();
+    const snap = await getDocs(query(membersCol, where('crewId', '==', crewId)));
+    await updateDoc(doc(crewsCol, crewId), { memberCount: snap.size });
   }),
 
   login: wrap(async (email, password) => {
