@@ -115,12 +115,18 @@ signing up and land in that crew. To stop new sign-ups, delete the `inviteCodes`
 document. To let a new wave of people into the same crew, create another
 `inviteCodes` document with the same `crewId` prefix.
 
-**Known limitation:** one account = one crew. Each `members/{uid}` document holds a
-single `crewId`, so someone who wants to be in two crews needs two separate accounts
-(a different email for each), and switches between them by logging out and back in.
-This is intentional -- true multi-crew membership (one login, a crew switcher) would
-mean reworking how membership is stored and rewriting the rules functions that
-currently assume one crew per account, which wasn't worth it for this app's scale.
+**Your home crew is still one account = one crew.** Each `members/{uid}` document
+holds a single `crewId`, and that's what chat, weigh-ins, the countdown, and the
+brand name in the header all key off. Switching your *home* crew still means a
+second account.
+
+**But you can also post workouts into other crews without a second account.**
+Settings (click your avatar → Settings) has an "Also post workouts to another
+crew" field -- enter another crew's Crew ID there and every `logWorkout()` call
+from then on writes one independent copy into your home crew *and* each crew
+you've linked (see `crewLinks` in the API reference). Each crew only ever sees
+its own copy -- there's no cross-crew visibility into chat, members, or anything
+else, just your own workouts showing up in more than one place.
 
 ### 5. Connect the website to Firebase
 
@@ -185,6 +191,10 @@ Every function throws an `Error` with a message that's safe to show on screen.
 - `joinCrew({ displayName, groupCode })` → member (logged-in person without a profile)
 - `login(email, password)` → member
 - `logout()`, `resetPassword(email)`, `currentUserId()`
+- `joinAdditionalCrew(groupCode)` → `[{ id, name, competitionDate }]`. Links another crew's Crew ID to
+  your account (doesn't change your home crew) so your future `logWorkout()` calls also post a copy
+  there. Backed by a `crewLinks/{uid}_{crewId}` doc, created once per link, create-only in the rules.
+- `myCrewLinks()` → `[{ id, name, competitionDate }]`, the crews you've linked via `joinAdditionalCrew`.
 
 **Members** (all crew-scoped)
 - `me()` → `{ id, crewId, displayName, avatarUrl, color, liftMode, email, joinedAt }`
@@ -206,7 +216,8 @@ Every function throws an `Error` with a message that's safe to show on screen.
     -- both are just plain data, no other code needs to change.
 
 **Workouts**
-- `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → workout (crewId is stamped from your own membership)
+- `logWorkout({ performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? })` → the home-crew workout.
+  Also writes one independent copy into each crew from `myCrewLinks()`, if any.
   - `exercises`: `[{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }]`
 - `updateWorkout(id, { ...any of the above })`, `deleteWorkout(id)` (own workouts only)
 - `getWorkout(id)`

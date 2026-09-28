@@ -92,6 +92,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- crew links ----------
+    // "Also share my workouts into this other crew" -- your members/{uid} doc stays
+    // your one home crew (chat, weigh-ins, brand, countdown); a crewLinks doc just
+    // grants an extra crew your logWorkout() writes will also post a copy into.
+    // Doc id is "<uid>_<crewId>", same shape/validation as joining your first crew.
+    function validNewCrewLink(linkId) {
+      let d = request.resource.data;
+      return isMember()
+        && d.uid == request.auth.uid
+        && linkId == d.uid + '_' + d.crewId
+        && d.keys().hasOnly(['uid', 'crewId', 'inviteCode', 'joinedAt'])
+        && validCode(d.inviteCode)
+        && codeExists(d.inviteCode)
+        && d.crewId == crewIdOfCode(d.inviteCode)
+        && exists(/databases/$(database)/documents/crews/$(d.crewId))
+        && d.crewId != myCrewId()
+        && d.joinedAt == request.time;
+    }
+
+    match /crewLinks/{linkId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if validNewCrewLink(linkId);
+      allow update, delete: if false;
+    }
+
+    // True for your home crew OR any crew you've linked -- workouts you log get
+    // posted as an independent copy into each of these.
+    function isMyWorkoutCrew(crewId) {
+      return crewId == myCrewId()
+        || exists(/databases/$(database)/documents/crewLinks/$(request.auth.uid + '_' + crewId));
+    }
+
     // ---------- workouts ----------
     function validDuration(x) {
       return x == null || (x is int && x >= 0 && x <= 1440);
@@ -110,7 +142,7 @@ service cloud.firestore {
       let required = ['userId', 'crewId', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
       return d.keys().hasOnly(allowed)
         && d.keys().hasAll(required)
-        && d.crewId == myCrewId()
+        && isMyWorkoutCrew(d.crewId)
         && d.performedOn is string
         && d.performedOn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && d.sortKey is string
@@ -164,7 +196,7 @@ service cloud.firestore {
       allow read: if isMember() && resource.data.crewId == myCrewId();
       allow create: if isMember() && validNewWorkout();
       allow update: if isMember() && (validOwnerEdit() || validKudosChange());
-      allow delete: if isMember() && resource.data.userId == request.auth.uid && resource.data.crewId == myCrewId();
+      allow delete: if isMember() && resource.data.userId == request.auth.uid && isMyWorkoutCrew(resource.data.crewId);
     }
 
     // ---------- crew chat (one shared channel, permanent history) ----------

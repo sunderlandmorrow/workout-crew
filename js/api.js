@@ -32,6 +32,7 @@ const storage = getStorage(app);
 
 const crewsCol = collection(db, 'crews');
 const membersCol = collection(db, 'members');
+const crewLinksCol = collection(db, 'crewLinks');
 const workoutsCol = collection(db, 'workouts');
 const messagesCol = collection(db, 'messages');
 const weightsCol = collection(db, 'weights');
@@ -146,6 +147,12 @@ function toWorkout(snap) {
   };
 }
 
+// crewIds this uid has linked (on top of their home crew), no crew-doc lookups.
+async function linkedCrewIds(uid) {
+  const snap = await getDocs(query(crewLinksCol, where('uid', '==', uid)));
+  return snap.docs.map((d) => d.data().crewId);
+}
+
 // Feed query builder. Date filters use sortKey so no extra indexes are needed.
 function feedQuery({ crewId, userId, from, to, pageSize = 20, after } = {}) {
   if (!crewId) throw new Error('crewId is required');
@@ -232,6 +239,34 @@ export const api = {
     return api.me();
   }),
 
+  /** Also post your logged workouts into another crew, on top of your home crew.
+   *  Doesn't change your home crew (chat/weigh-ins/brand stay put) -- see myCrewLinks(). */
+  joinAdditionalCrew: wrap(async (groupCode) => {
+    const user = requireUser();
+    const code = v.inviteCode(groupCode);
+    const crewId = v.crewIdFromInviteCode(code);
+    try {
+      await setDoc(doc(crewLinksCol, `${user.uid}_${crewId}`), {
+        uid: user.uid, crewId, inviteCode: code, joinedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      if (err.code === 'permission-denied') throw new v.ValidationError("Wrong code, or you're already in that crew");
+      throw err;
+    }
+    return api.myCrewLinks();
+  }),
+
+  /** Crews you've linked in addition to your home crew, via joinAdditionalCrew(). */
+  myCrewLinks: wrap(async () => {
+    const user = requireUser();
+    const crewIds = await linkedCrewIds(user.uid);
+    const crews = await Promise.all(crewIds.map(async (crewId) => {
+      const crewSnap = await getDoc(doc(crewsCol, crewId));
+      return crewSnap.exists() ? toCrew(crewSnap) : null;
+    }));
+    return crews.filter(Boolean);
+  }),
+
   login: wrap(async (email, password) => {
     await signInWithEmailAndPassword(auth, String(email).trim(), password);
     return api.me();
@@ -291,22 +326,25 @@ export const api = {
   // ---- workouts ----
 
   /** input: { performedOn, type, durationMin?, notes?, rating?: 1-5, exercises? }
-   *  exercises: [{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }] */
+   *  exercises: [{ name, sets?, reps?, weight?, unit?: 'lb'|'kg', distanceKm?, durationMin? }]
+   *  Posts one independent copy into your home crew and each crew you've linked
+   *  (see joinAdditionalCrew()) -- returns the home-crew copy. */
   logWorkout: wrap(async (input) => {
     const user = requireUser();
     const member = await api.me();
     if (!member) throw new Error('Join the crew first');
     const w = v.workout(input);
-    const ref = await addDoc(workoutsCol, {
+    const crewIds = [member.crewId, ...(await linkedCrewIds(user.uid))];
+    const refs = await Promise.all(crewIds.map((crewId) => addDoc(workoutsCol, {
       userId: user.uid,
-      crewId: member.crewId,
+      crewId,
       ...w,
       sortKey: makeSortKey(w.performedOn),
       kudos: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
-    return api.getWorkout(ref.id);
+    })));
+    return api.getWorkout(refs[0].id);
   }),
 
   getWorkout: wrap(async (id) => {
