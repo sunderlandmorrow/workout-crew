@@ -1251,17 +1251,14 @@
         const byId = Object.fromEntries(members.map((m) => [m.id, m]));
         const allWorkouts = await fetchAllWorkouts({ from, to });
         const workouts = allWorkouts.filter((w) => w.type !== 'rest');
-        const restWorkouts = allWorkouts.filter((w) => w.type === 'rest');
 
         const byDate = {};
-        const restByDate = {};
         const allByDate = {};
         const rawCounts = {};
         workouts.forEach((w) => {
           (byDate[w.performedOn] ??= new Set()).add(w.userId);
           rawCounts[w.userId] = (rawCounts[w.userId] || 0) + 1;
         });
-        restWorkouts.forEach((w) => { (restByDate[w.performedOn] ??= new Set()).add(w.userId); });
         allWorkouts.forEach((w) => { (allByDate[w.performedOn] ??= []).push(w); });
 
         document.getElementById('cal-total').textContent = 'Workouts logged this month:';
@@ -1294,17 +1291,10 @@
         for (let i = 0; i < firstWeekday; i++) cells.push('<div class="cal-cell empty"></div>');
         for (let day = 1; day <= lastDay; day++) {
           const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
-          const activeIds = byDate[dateStr] || new Set();
-          const dots = [...activeIds].map((id) => {
+          const dots = [...(byDate[dateStr] || [])].map((id) => {
             const name = byId[id] ? byId[id].displayName : '?';
             return `<div class="cal-dot" style="background:${avatarColor(name, byId[id]?.color)}">${escapeHtml(firstInitial(name))}</div>`;
-          }).join('')
-            // Rest-only dots (skip anyone who already has a real workout dot that day) in the
-            // shared red accent color, not per-person, so a rest day reads at a glance.
-            + [...(restByDate[dateStr] || [])].filter((id) => !activeIds.has(id)).map((id) => {
-              const name = byId[id] ? byId[id].displayName : '?';
-              return `<div class="cal-dot" style="background:var(--accent)" title="${escapeHtml(name)}: Rest">${escapeHtml(firstInitial(name))}</div>`;
-            }).join('');
+          }).join('');
           cells.push(`
             <div class="cal-cell" data-date="${dateStr}">
               <div class="cal-daynum">${day}</div>
