@@ -397,12 +397,6 @@
     .weight-photo-card { width: 120px; text-decoration: none; color: inherit; }
     .weight-photo-card img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; display: block; border: 1px solid var(--line); }
     .weight-photo-caption { font-size: 0.7rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
-
-    footer.app-footer {
-      display: flex; justify-content: space-between;
-      font-size: 0.68rem; color: var(--muted); letter-spacing: 0.06em;
-      margin-top: 8px;
-    }
   </style>
 </head>
 <body>
@@ -586,6 +580,14 @@
           <button type="button" class="side-nav-btn caps" id="tab-btn-crews">Crews</button>
         </nav>
         <div class="dashboard-main">
+        <div id="tab-crews" style="display:none;">
+          <button class="link" id="crews-back-btn">&larr; Back</button>
+          <div class="card card-calendar">
+            <h2 class="caps">Workout Crews</h2>
+            <div id="crews-list"><p class="empty">Loading…</p></div>
+          </div>
+        </div>
+        <div id="home-view">
         <header class="app-header">
           <div>
             <div class="brand">${escapeHtml(crew.name.toUpperCase())}</div>
@@ -663,13 +665,6 @@
           <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
           <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
           <button class="tab-btn caps" id="tab-btn-weight">Weight</button>
-        </div>
-
-        <div id="tab-crews" style="display:none;">
-          <div class="card card-calendar">
-            <h2 class="caps">Workout Crews</h2>
-            <div id="crews-list"><p class="empty">Loading…</p></div>
-          </div>
         </div>
 
         <div id="tab-checkin">
@@ -830,9 +825,7 @@
           </div>
         </div>
 
-        <footer class="app-footer caps">
-          <span>BrothersAndArms</span>
-        </footer>
+        </div>
         </div>
         </div>
       `;
@@ -998,12 +991,27 @@
         calendar: { panel: document.getElementById('tab-calendar'), btn: document.getElementById('tab-btn-calendar') },
         weight: { panel: document.getElementById('tab-weight'), btn: document.getElementById('tab-btn-weight') },
       };
+      const homeView = document.getElementById('home-view');
+      let lastHomeTab = 'checkin'; // so "Back" from Crews returns wherever you were
+
       function showTab(name) {
         Object.entries(tabs).forEach(([key, t]) => {
-          t.panel.style.display = key === name ? '' : 'none';
           t.btn.classList.toggle('active', key === name);
         });
-        if (name === 'crews') loadCrewsTab();
+
+        if (name === 'crews') {
+          homeView.style.display = 'none';
+          tabs.crews.panel.style.display = '';
+          loadCrewsTab();
+          return;
+        }
+        lastHomeTab = name;
+        homeView.style.display = '';
+        tabs.crews.panel.style.display = 'none';
+        Object.entries(tabs).forEach(([key, t]) => {
+          if (key === 'crews') return;
+          t.panel.style.display = key === name ? '' : 'none';
+        });
         if (name === 'calendar') loadCalendarMonth();
         if (name === 'weight') loadWeightTab();
         if (name === 'chat') chatList.scrollTop = chatList.scrollHeight;
@@ -1013,6 +1021,7 @@
       tabs.chat.btn.addEventListener('click', () => showTab('chat'));
       tabs.calendar.btn.addEventListener('click', () => showTab('calendar'));
       tabs.weight.btn.addEventListener('click', () => showTab('weight'));
+      document.getElementById('crews-back-btn').addEventListener('click', () => showTab(lastHomeTab));
 
       // ---- Workout Crews (browse every crew that exists) ----
       async function loadCrewsTab() {
