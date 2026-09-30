@@ -223,24 +223,6 @@
     .rating-value { font-size: 0.85rem; font-weight: 700; min-width: 70px; text-align: right; }
     .log-btn { flex: 1 1 160px; align-self: stretch; }
 
-    /* ---- dashboard shell: vertical side-nav + main content ---- */
-    .dashboard-shell { display: flex; align-items: flex-start; gap: 6px; }
-    .side-nav {
-      flex: none;
-      display: flex; flex-direction: column; gap: 6px;
-      width: 34px;
-      position: sticky; top: env(safe-area-inset-top);
-    }
-    .side-nav-btn {
-      width: 100%;
-      background: var(--card); border: 1px solid var(--line); border-radius: 6px;
-      padding: 6px 1px;
-      font-size: 0.5rem; letter-spacing: 0.01em;
-      color: var(--ink); cursor: pointer;
-    }
-    .side-nav-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-    .dashboard-main { flex: 1; min-width: 0; }
-
     /* ---- tabs ---- */
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
     .tab-btn {
@@ -575,19 +557,6 @@
       let myCrews = [crew]; // home crew + any linked crews, filled in by loadMyCrews()
 
       app.innerHTML = `
-        <div class="dashboard-shell">
-        <nav class="side-nav">
-          <button type="button" class="side-nav-btn caps" id="tab-btn-crews">Crews</button>
-        </nav>
-        <div class="dashboard-main">
-        <div id="tab-crews" style="display:none;">
-          <button class="link" id="crews-back-btn">&larr; Back</button>
-          <div class="card card-calendar">
-            <h2 class="caps">Workout Crews</h2>
-            <div id="crews-list"><p class="empty">Loading…</p></div>
-          </div>
-        </div>
-        <div id="home-view">
         <header class="app-header">
           <div>
             <div class="brand">${escapeHtml(crew.name.toUpperCase())}</div>
@@ -616,6 +585,7 @@
               </button>
               <div class="avatar-popover" id="avatar-popover">
                 <button type="button" class="caps" id="open-settings-btn">Settings</button>
+                <button type="button" class="caps" id="tab-btn-crews">Workout Crews</button>
               </div>
             </div>
             <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
@@ -665,6 +635,13 @@
           <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
           <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
           <button class="tab-btn caps" id="tab-btn-weight">Weight</button>
+        </div>
+
+        <div id="tab-crews" style="display:none;">
+          <div class="card card-calendar">
+            <h2 class="caps">Workout Crews</h2>
+            <div id="crews-list"><p class="empty">Loading…</p></div>
+          </div>
         </div>
 
         <div id="tab-checkin">
@@ -823,10 +800,6 @@
             <table class="weight-table" id="weight-table"></table>
             <div class="weight-gallery" id="weight-gallery"></div>
           </div>
-        </div>
-
-        </div>
-        </div>
         </div>
       `;
 
@@ -991,37 +964,24 @@
         calendar: { panel: document.getElementById('tab-calendar'), btn: document.getElementById('tab-btn-calendar') },
         weight: { panel: document.getElementById('tab-weight'), btn: document.getElementById('tab-btn-weight') },
       };
-      const homeView = document.getElementById('home-view');
-      let lastHomeTab = 'checkin'; // so "Back" from Crews returns wherever you were
-
       function showTab(name) {
         Object.entries(tabs).forEach(([key, t]) => {
+          t.panel.style.display = key === name ? '' : 'none';
           t.btn.classList.toggle('active', key === name);
         });
-
-        if (name === 'crews') {
-          homeView.style.display = 'none';
-          tabs.crews.panel.style.display = '';
-          loadCrewsTab();
-          return;
-        }
-        lastHomeTab = name;
-        homeView.style.display = '';
-        tabs.crews.panel.style.display = 'none';
-        Object.entries(tabs).forEach(([key, t]) => {
-          if (key === 'crews') return;
-          t.panel.style.display = key === name ? '' : 'none';
-        });
+        if (name === 'crews') loadCrewsTab();
         if (name === 'calendar') loadCalendarMonth();
         if (name === 'weight') loadWeightTab();
         if (name === 'chat') chatList.scrollTop = chatList.scrollHeight;
       }
-      tabs.crews.btn.addEventListener('click', () => showTab('crews'));
+      tabs.crews.btn.addEventListener('click', () => {
+        avatarPopover.classList.remove('open');
+        showTab('crews');
+      });
       tabs.checkin.btn.addEventListener('click', () => showTab('checkin'));
       tabs.chat.btn.addEventListener('click', () => showTab('chat'));
       tabs.calendar.btn.addEventListener('click', () => showTab('calendar'));
       tabs.weight.btn.addEventListener('click', () => showTab('weight'));
-      document.getElementById('crews-back-btn').addEventListener('click', () => showTab(lastHomeTab));
 
       // ---- Workout Crews (browse every crew that exists) ----
       async function loadCrewsTab() {
