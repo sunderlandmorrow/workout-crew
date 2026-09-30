@@ -1,8 +1,9 @@
-// Recomputes and saves memberCount and totalPoints on every crews/{crewId} doc,
-// from the actual members/workouts collections. Useful right after the "Workout
-// Crews" browse tab shipped (existing crews have neither field yet), or any time
-// you want to force-resync all of them at once instead of waiting for each
-// crew's own members to trigger api.refreshCrewStats() by using the app.
+// Recomputes and saves memberCount, memberNames, and totalPoints on every
+// crews/{crewId} doc, from the actual members/workouts collections. Useful right
+// after the "Workout Crews" browse tab shipped (existing crews have none of these
+// fields yet), or any time you want to force-resync all of them at once instead
+// of waiting for each crew's own members to trigger api.refreshCrewStats() by
+// using the app.
 //
 // Points formula must match js/stats.js's totalPoints(): 10 per logged workout,
 // rest days don't count.
@@ -47,10 +48,13 @@ async function main() {
   ]);
 
   const memberCounts = {};
+  const memberNames = {};
   membersSnap.forEach((d) => {
-    const crewId = d.data().crewId;
+    const { crewId, displayName } = d.data();
     memberCounts[crewId] = (memberCounts[crewId] || 0) + 1;
+    (memberNames[crewId] ??= []).push(displayName);
   });
+  Object.values(memberNames).forEach((names) => names.sort());
 
   const points = {};
   workoutsSnap.forEach((d) => {
@@ -61,10 +65,13 @@ async function main() {
 
   for (const crewDoc of crewsSnap.docs) {
     const memberCount = memberCounts[crewDoc.id] || 0;
+    const names = memberNames[crewDoc.id] || [];
     const totalPoints = points[crewDoc.id] || 0;
     const before = crewDoc.data();
-    console.log(`${crewDoc.id}: memberCount ${before.memberCount ?? '(unset)'} -> ${memberCount}, totalPoints ${before.totalPoints ?? '(unset)'} -> ${totalPoints}`);
-    if (args.apply) await crewDoc.ref.update({ memberCount, totalPoints });
+    console.log(`${crewDoc.id}: memberCount ${before.memberCount ?? '(unset)'} -> ${memberCount}, `
+      + `memberNames ${JSON.stringify(before.memberNames ?? null)} -> ${JSON.stringify(names)}, `
+      + `totalPoints ${before.totalPoints ?? '(unset)'} -> ${totalPoints}`);
+    if (args.apply) await crewDoc.ref.update({ memberCount, memberNames: names, totalPoints });
   }
 
   console.log('\nDone.' + (args.apply ? '' : ' Re-run with --apply to write these changes.'));

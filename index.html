@@ -224,7 +224,7 @@
     .log-btn { flex: 1 1 160px; align-self: stretch; }
 
     /* ---- tabs ---- */
-    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
     .tab-btn {
       border: 1px solid var(--line);
       background: var(--bg);
@@ -998,6 +998,7 @@
             <div class="feed-row">
               <div class="feed-name">${escapeHtml(c.name)} <span class="points">[${c.totalPoints}]</span>${c.id === crew.id ? ' <span class="points">(viewing)</span>' : ''}</div>
               <div class="feed-meta">${c.memberCount} ${c.memberCount === 1 ? 'person' : 'people'}</div>
+              ${c.memberNames.length ? `<div class="feed-exercises">${c.memberNames.map(escapeHtml).join(', ')}</div>` : ''}
             </div>
           `).join('') || '<p class="empty">No crews yet.</p>';
         } catch (err) {

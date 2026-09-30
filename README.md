@@ -211,13 +211,14 @@ Every function throws an `Error` with a message that's safe to show on screen.
   your account (doesn't change your home crew) so your future `logWorkout()` calls also post a copy
   there. Backed by a `crewLinks/{uid}_{crewId}` doc, created once per link, create-only in the rules.
 - `myCrewLinks()` → `[{ id, name, competitionDate }]`, the crews you've linked via `joinAdditionalCrew`.
-- `getCrew(crewId)` → `{ id, name, competitionDate, memberCount, totalPoints }` or `null`.
+- `getCrew(crewId)` → `{ id, name, competitionDate, memberCount, memberNames, totalPoints }` or `null`.
 - `allCrews()` → same shape as `getCrew`, every crew that exists, for the "Workout Crews" browse tab
-  (ranked by `totalPoints` there, most active crew first). Crew names/counts aren't treated as
-  sensitive (unlike members/workouts/chat/weigh-ins, which stay fully isolated) -- any signed-in
-  member can list them.
-- `refreshCrewStats(crewId)` → recomputes and saves that crew's `memberCount` and `totalPoints`
-  (10 per logged workout, same formula as a person's own point total -- `js/stats.js`'s
+  (ranked by `totalPoints` there, most active crew first, each with its member list underneath).
+  Crew names/counts/member names aren't treated as sensitive (unlike the members/workouts/chat/
+  weigh-in documents themselves -- avatarUrl, liftMode, joinedAt, everything else about a person
+  stays fully isolated) -- any signed-in member can list them.
+- `refreshCrewStats(crewId)` → recomputes and saves that crew's `memberCount`, `memberNames`, and
+  `totalPoints` (10 per logged workout, same formula as a person's own point total -- `js/stats.js`'s
   `totalPoints()`) from queries only its own members can run. You can only do this for a crew you're
   in (home or linked). The dashboard calls this for its active crew on every load, so the numbers
   drift at most a little -- `scripts/backfill-crew-stats.mjs` force-resyncs every crew at once if you

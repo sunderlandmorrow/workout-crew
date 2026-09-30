@@ -56,15 +56,17 @@ service cloud.firestore {
     // ---------- crews ----------
     // Created by hand in the console, one per isolated group: { name, competitionDate?, createdAt }.
     // Doc id is the crewId slug that invite codes for that crew start with (e.g. "brothersandarms").
-    // Crew name/competitionDate/memberCount/totalPoints aren't sensitive -- any signed-in
-    // member can browse every crew that exists (the "Workout Crews" tab); only members/
-    // workouts/chat/weigh-ins are actually isolated per crew.
+    // Crew name/competitionDate/memberCount/memberNames/totalPoints aren't sensitive -- any
+    // signed-in member can browse every crew that exists and see who's in it (the "Workout
+    // Crews" tab); only the members/workouts/chat/weigh-in documents themselves stay isolated
+    // per crew (avatarUrl, liftMode, joinedAt, everything else about a person).
     function validCrewStatsUpdate(crewId) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let d = request.resource.data;
       return isInCrew(crewId)
-        && changed.hasOnly(['memberCount', 'totalPoints'])
+        && changed.hasOnly(['memberCount', 'memberNames', 'totalPoints'])
         && (!changed.hasAny(['memberCount']) || (d.memberCount is int && d.memberCount >= 0))
+        && (!changed.hasAny(['memberNames']) || (d.memberNames is list && d.memberNames.size() <= 200))
         && (!changed.hasAny(['totalPoints']) || (d.totalPoints is int && d.totalPoints >= 0));
     }
 

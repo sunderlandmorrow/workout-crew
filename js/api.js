@@ -101,6 +101,7 @@ function toCrew(snap) {
     competitionDate: d.competitionDate ?? null,
     memberCount: d.memberCount ?? 0,
     totalPoints: d.totalPoints ?? 0,
+    memberNames: d.memberNames ?? [],
   };
 }
 
@@ -290,17 +291,21 @@ export const api = {
     return snap.docs.map(toCrew);
   }),
 
-  /** Recomputes and saves crewId's member count and total points, from queries
-   *  only its own members can run. Call this occasionally (e.g. on dashboard
-   *  load) to keep allCrews()'s numbers from drifting. */
+  /** Recomputes and saves crewId's member count, member name list, and total
+   *  points, from queries only its own members can run. Call this occasionally
+   *  (e.g. on dashboard load) to keep allCrews()'s numbers from drifting. */
   refreshCrewStats: wrap(async (crewId) => {
     requireUser();
     const [membersSnap, workoutsSnap] = await Promise.all([
-      getDocs(query(membersCol, where('crewId', '==', crewId))),
+      getDocs(query(membersCol, where('crewId', '==', crewId), orderBy('displayName'))),
       getDocs(query(workoutsCol, where('crewId', '==', crewId))),
     ]);
     const workouts = workoutsSnap.docs.map((d) => d.data());
-    await updateDoc(doc(crewsCol, crewId), { memberCount: membersSnap.size, totalPoints: totalPoints(workouts) });
+    await updateDoc(doc(crewsCol, crewId), {
+      memberCount: membersSnap.size,
+      memberNames: membersSnap.docs.map((d) => d.data().displayName),
+      totalPoints: totalPoints(workouts),
+    });
   }),
 
   login: wrap(async (email, password) => {
