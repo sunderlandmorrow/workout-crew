@@ -136,13 +136,12 @@ Each crew still only ever sees *its own* copy of anything -- crews remain
 fully isolated from each other; being in both just means *you* can see and
 post to both, not that the crews can see each other.
 
-**Known gap:** a multi-crew person's avatar is only stored once, under their
-home crew's Storage folder (`storage.rules`' `isCrewMember()` does account for
-crewLinks, so anyone who has *that* crew linked can still read it) -- but a
-regular member of a crew they've cross-posted into, who has never linked that
-poster's home crew, can't read the file and just sees initials instead. Their
-workouts/messages still show up fine; it's purely the photo. Low priority
-since it degrades gracefully.
+A person's avatar photo is consistent everywhere they show up, even in a crew
+they've only cross-posted into: `avatarUrl` is denormalized onto each
+workout/message doc at write time (like `displayName`/`color`), and the
+Storage rule for `avatars/{crewId}/{uid}/{fileName}` allows read to *any*
+signed-in member of *any* crew (not just crew-scoped), since a profile photo
+isn't sensitive.
 
 ### 5. Connect the website to Firebase
 

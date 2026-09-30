@@ -20,6 +20,16 @@ service firebase.storage {
           || firestore.exists(/databases/(default)/documents/crewLinks/$(request.auth.uid + '_' + crewId)));
     }
 
+    // Any signed-in member of any crew -- not sensitive, same treatment as crew
+    // names/member lists in Firestore. Avatars use this for reads (see below):
+    // a profile photo is stored once under its owner's home crew and would
+    // otherwise only be viewable by people who share/link that specific crew,
+    // which broke a cross-posting member's photo showing up consistently.
+    function isAnyMember() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/members/$(request.auth.uid));
+    }
+
     // Chat photos: only the uploader can write to their own folder, images only, 8MB cap.
     match /chatImages/{crewId}/{uid}/{fileName} {
       allow read: if isCrewMember(crewId);
@@ -40,9 +50,12 @@ service firebase.storage {
       allow delete: if false;
     }
 
-    // Profile pictures: one file per person, replaceable any time.
+    // Profile pictures: one file per person, replaceable any time. Readable by
+    // any signed-in member of any crew (not just this file's own crewId) so a
+    // person's photo is consistent everywhere they show up, including a crew
+    // they've only cross-posted into.
     match /avatars/{crewId}/{uid}/{fileName} {
-      allow read: if isCrewMember(crewId);
+      allow read: if isAnyMember();
       allow write: if isCrewMember(crewId)
         && request.auth.uid == uid
         && request.resource.size < 8 * 1024 * 1024

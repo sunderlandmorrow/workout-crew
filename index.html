@@ -1194,15 +1194,16 @@
       let members = [];
       let todaysWorkouts = [];
 
-      // colorOverride lets a caller that already knows the poster's identity (a
-      // workout/message doc, which denormalizes displayName/color at write time)
-      // skip the members-roster lookup -- needed since someone who's only linked
-      // into this crew (not a roster member of it) won't be found by uid there.
-      function avatarHtml(name, userId, colorOverride) {
+      // colorOverride/avatarUrlOverride let a caller that already knows the poster's
+      // identity (a workout/message doc, which denormalizes displayName/color/avatarUrl
+      // at write time) skip the members-roster lookup -- needed since someone who's
+      // only linked into this crew (not a roster member of it) won't be found by uid there.
+      function avatarHtml(name, userId, colorOverride, avatarUrlOverride) {
         const person = members.find((m) => m.id === userId);
         const bg = avatarColor(name, colorOverride ?? person?.color);
-        if (person && person.avatarUrl) {
-          return `<div class="avatar" style="background:${bg}"><img src="${escapeHtml(person.avatarUrl)}" alt="${escapeHtml(name)}"></div>`;
+        const avatarUrl = avatarUrlOverride ?? person?.avatarUrl;
+        if (avatarUrl) {
+          return `<div class="avatar" style="background:${bg}"><img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(name)}"></div>`;
         }
         return `<div class="avatar" style="background:${bg}">${escapeHtml(initials(name))}</div>`;
       }
@@ -1220,7 +1221,7 @@
           : '';
         return `
           <div class="feed-row">
-            ${avatarHtml(name, w.userId, w.color)}
+            ${avatarHtml(name, w.userId, w.color, w.avatarUrl)}
             <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
             <div class="feed-meta">${escapeHtml(label)}</div>
             <div class="feed-meta">${formatDuration(w.durationMin)}</div>
@@ -1274,7 +1275,7 @@
             : 'sending…';
           return `
             <div class="chat-msg">
-              ${avatarHtml(m.displayName, m.userId, m.color)}
+              ${avatarHtml(m.displayName, m.userId, m.color, m.avatarUrl)}
               <div class="chat-body">
                 <div class="chat-head">
                   <span class="chat-name">${nameWithPoints(m.displayName, m.userId)}</span>
@@ -1404,28 +1405,40 @@
         const byDate = {};
         const allByDate = {};
         const rawCounts = {};
+        const contributors = new Map(); // userId -> {name, color}, from every workout seen this month
         workouts.forEach((w) => {
           const dayMap = (byDate[w.performedOn] ??= new Map());
-          if (!dayMap.has(w.userId)) {
+          if (!contributors.has(w.userId)) {
             const person = byId[w.userId];
             // Prefer the workout's own denormalized name/color -- a cross-posting
             // linked-crew member won't be found in this crew's own roster (byId).
-            dayMap.set(w.userId, {
+            contributors.set(w.userId, {
               name: w.displayName || (person ? person.displayName : '?'),
               color: w.color ?? person?.color,
             });
           }
+          if (!dayMap.has(w.userId)) dayMap.set(w.userId, contributors.get(w.userId));
           rawCounts[w.userId] = (rawCounts[w.userId] || 0) + 1;
         });
         allWorkouts.forEach((w) => { (allByDate[w.performedOn] ??= []).push(w); });
 
+        // Roster members always show (even at 0 this month) plus anyone who
+        // contributed without being on this crew's own roster (cross-posters).
+        const rosterIds = new Set(members.map((m) => m.id));
+        const breakdownPeople = [
+          ...members.map((m) => ({ id: m.id, name: m.displayName, color: m.color })),
+          ...[...contributors.entries()]
+            .filter(([userId]) => !rosterIds.has(userId))
+            .map(([userId, identity]) => ({ id: userId, ...identity })),
+        ];
+
         document.getElementById('cal-total').textContent = 'Workouts logged this month:';
-        document.getElementById('cal-breakdown').innerHTML = [...members]
+        document.getElementById('cal-breakdown').innerHTML = breakdownPeople
           .sort((a, b) => (rawCounts[b.id] || 0) - (rawCounts[a.id] || 0))
-          .map((m) => `
+          .map((p) => `
             <span class="cal-person">
-              <span class="cal-swatch" style="background:${avatarColor(m.displayName, m.color)}"></span>
-              ${escapeHtml(m.displayName)}: ${rawCounts[m.id] || 0}
+              <span class="cal-swatch" style="background:${avatarColor(p.name, p.color)}"></span>
+              ${escapeHtml(p.name)}: ${rawCounts[p.id] || 0}
             </span>
           `).join('');
 
