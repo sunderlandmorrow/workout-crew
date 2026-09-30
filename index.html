@@ -573,6 +573,7 @@
           ` : ''}
         </header>
 
+        <div class="step-label caps" id="crew-switcher-label" style="display:none; text-align:center;">Active crews you're in</div>
         <div class="crew-switcher" id="crew-switcher" style="display:none;"></div>
 
         <div class="row" style="margin-bottom: 16px;">
@@ -821,8 +822,10 @@
         ]);
         myCrews = [homeCrew, ...links];
         const switcher = document.getElementById('crew-switcher');
+        const switcherLabel = document.getElementById('crew-switcher-label');
         if (myCrews.length > 1) {
           switcher.style.display = '';
+          switcherLabel.style.display = '';
           switcher.innerHTML = myCrews.map((c) => `
             <button type="button" class="crew-switch-btn caps ${c.id === crew.id ? 'active' : ''}" data-crew-id="${escapeHtml(c.id)}">${escapeHtml(c.name)}</button>
           `).join('');
@@ -835,6 +838,7 @@
           });
         } else {
           switcher.style.display = 'none';
+          switcherLabel.style.display = 'none';
         }
         renderPostToSelector();
       }
