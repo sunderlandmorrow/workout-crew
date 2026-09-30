@@ -35,6 +35,7 @@
       background: var(--bg);
       color: var(--ink);
       padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px);
+      overflow-x: hidden; /* a layout that's briefly too wide (e.g. an overflowing row) shouldn't make the whole page pannable */
     }
     .wrap { max-width: 960px; margin: 0 auto; }
     a, button { font-family: inherit; }
@@ -222,8 +223,28 @@
     .rating-value { font-size: 0.85rem; font-weight: 700; min-width: 70px; text-align: right; }
     .log-btn { flex: 1 1 160px; align-self: stretch; }
 
+    /* ---- dashboard shell: vertical side-nav + main content ---- */
+    .dashboard-shell { display: flex; align-items: flex-start; gap: 10px; }
+    .side-nav {
+      flex: none;
+      display: flex; flex-direction: column; gap: 6px;
+      width: 52px;
+      position: sticky; top: env(safe-area-inset-top);
+    }
+    .side-nav-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      width: 100%;
+      background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+      padding: 8px 2px;
+      font-size: 0.56rem; letter-spacing: 0.02em;
+      color: var(--ink); cursor: pointer;
+    }
+    .side-nav-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .side-nav-icon { font-size: 1.25rem; line-height: 1; }
+    .dashboard-main { flex: 1; min-width: 0; }
+
     /* ---- tabs ---- */
-    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
     .tab-btn {
       border: 1px solid var(--line);
       background: var(--bg);
@@ -562,6 +583,14 @@
       let myCrews = [crew]; // home crew + any linked crews, filled in by loadMyCrews()
 
       app.innerHTML = `
+        <div class="dashboard-shell">
+        <nav class="side-nav">
+          <button type="button" class="side-nav-btn caps" id="tab-btn-crews">
+            <span class="side-nav-icon">🏋</span>
+            <span>Crews</span>
+          </button>
+        </nav>
+        <div class="dashboard-main">
         <header class="app-header">
           <div>
             <div class="brand">${escapeHtml(crew.name.toUpperCase())}</div>
@@ -635,7 +664,6 @@
         </div>
 
         <div class="tabs">
-          <button class="tab-btn caps" id="tab-btn-crews">Workout Crews</button>
           <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
           <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
           <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
@@ -810,6 +838,8 @@
         <footer class="app-footer caps">
           <span>BrothersAndArms</span>
         </footer>
+        </div>
+        </div>
       `;
 
       document.getElementById('signout').addEventListener('click', () => api.logout());
