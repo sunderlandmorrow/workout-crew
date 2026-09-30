@@ -256,16 +256,20 @@ Every function throws an `Error` with a message that's safe to show on screen.
 
 A workout looks like:
 ```js
-{ id, userId, isMine, performedOn: '2026-09-15', type: 'lift', durationMin: 45, notes, rating,
-  exercises: [...], kudos: [uid...], kudosCount, kudoedByMe, createdAt, updatedAt, pending }
+{ id, userId, isMine, displayName, color, performedOn: '2026-09-15', type: 'lift', durationMin: 45,
+  notes, rating, exercises: [...], kudos: [uid...], kudosCount, kudoedByMe, createdAt, updatedAt, pending }
 ```
+`displayName`/`color` are a snapshot of the poster's profile at logging time, denormalized directly
+onto the doc (same idea as chat messages below). That's what lets a crew's feed/calendar show the
+right name and avatar color even for someone who's only linked into that crew, not a roster member of
+it -- looking them up in that crew's own `members` list wouldn't otherwise find them.
 
 **Kudos**: `kudos(id)`, `unkudos(id)`
 
 **Chat**: one shared channel per crew, permanent history.
 - `sendMessage(text, crewId?)` → crewId defaults to your home crew; pass the crew you're currently viewing to chat there instead.
 - `sendPhoto(file, caption?, crewId?)` → uploads to Firebase Storage (images only, 8MB max), posts with the caption. Requires the Blaze plan + `storage.rules` published.
-- `watchChat(crewId, callback, onError?)` → cb gets `[{ id, userId, displayName, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
+- `watchChat(crewId, callback, onError?)` → cb gets `[{ id, userId, displayName, color, text, imageUrl, createdAt, pending }]`, oldest first (last 1000). Returns an unsubscribe function.
 
 **Monthly weigh-in**: one entry per person per calendar month, can't be changed once logged.
 - `currentMonth()` → `'YYYY-MM'`

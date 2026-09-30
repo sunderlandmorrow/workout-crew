@@ -33,6 +33,13 @@ service cloud.firestore {
       return n is string && n.size() >= 1 && n.size() <= 40;
     }
 
+    // Denormalized onto workouts/messages at write time (like validName above),
+    // so a crew's feed/chat can show a poster's name/color even when they're
+    // only linked into that crew, not a roster member of it.
+    function validColor(x) {
+      return x == null || (x is string && x.matches('^#[0-9a-fA-F]{6}$'));
+    }
+
     // "<crewId>_<random suffix>" -- the crew a code belongs to is encoded in the code itself.
     function validCode(c) {
       return c is string && c.matches('^[a-z0-9-]{2,40}_[A-Za-z0-9]{4,20}$');
@@ -152,11 +159,13 @@ service cloud.firestore {
     }
 
     function validWorkout(d) {
-      let allowed = ['userId', 'crewId', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
-      let required = ['userId', 'crewId', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
+      let allowed = ['userId', 'crewId', 'displayName', 'color', 'performedOn', 'sortKey', 'type', 'durationMin', 'notes', 'rating', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
+      let required = ['userId', 'crewId', 'displayName', 'color', 'performedOn', 'sortKey', 'type', 'exercises', 'kudos', 'createdAt', 'updatedAt'];
       return d.keys().hasOnly(allowed)
         && d.keys().hasAll(required)
         && isInCrew(d.crewId)
+        && validName(d.displayName)
+        && validColor(d.color)
         && d.performedOn is string
         && d.performedOn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && d.sortKey is string
@@ -222,11 +231,12 @@ service cloud.firestore {
     }
 
     function validMessage(d) {
-      return d.keys().hasOnly(['userId', 'crewId', 'displayName', 'text', 'imageUrl', 'createdAt'])
-        && d.keys().hasAll(['userId', 'crewId', 'displayName', 'text', 'createdAt'])
+      return d.keys().hasOnly(['userId', 'crewId', 'displayName', 'color', 'text', 'imageUrl', 'createdAt'])
+        && d.keys().hasAll(['userId', 'crewId', 'displayName', 'color', 'text', 'createdAt'])
         && d.userId == request.auth.uid
         && isInCrew(d.crewId)
         && validName(d.displayName)
+        && validColor(d.color)
         && d.text is string && d.text.size() <= 2000
         && (d.text.size() >= 1 || 'imageUrl' in d)
         && validImageUrl(d)

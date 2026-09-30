@@ -1193,9 +1193,13 @@
       let members = [];
       let todaysWorkouts = [];
 
-      function avatarHtml(name, userId) {
+      // colorOverride lets a caller that already knows the poster's identity (a
+      // workout/message doc, which denormalizes displayName/color at write time)
+      // skip the members-roster lookup -- needed since someone who's only linked
+      // into this crew (not a roster member of it) won't be found by uid there.
+      function avatarHtml(name, userId, colorOverride) {
         const person = members.find((m) => m.id === userId);
-        const bg = avatarColor(name, person?.color);
+        const bg = avatarColor(name, colorOverride ?? person?.color);
         if (person && person.avatarUrl) {
           return `<div class="avatar" style="background:${bg}"><img src="${escapeHtml(person.avatarUrl)}" alt="${escapeHtml(name)}"></div>`;
         }
@@ -1205,7 +1209,7 @@
       // Shared by today's feed and the calendar's day-detail view.
       function feedRowHtml(w, byId) {
         const person = byId[w.userId];
-        const name = person ? person.displayName : 'Someone';
+        const name = w.displayName || (person ? person.displayName : 'Someone');
         const { label } = parseType(w.type);
         const time = w.createdAt
           ? w.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -1215,7 +1219,7 @@
           : '';
         return `
           <div class="feed-row">
-            ${avatarHtml(name, w.userId)}
+            ${avatarHtml(name, w.userId, w.color)}
             <div class="feed-name">${nameWithPoints(name, w.userId)}</div>
             <div class="feed-meta">${escapeHtml(label)}</div>
             <div class="feed-meta">${formatDuration(w.durationMin)}</div>
@@ -1269,7 +1273,7 @@
             : 'sending…';
           return `
             <div class="chat-msg">
-              ${avatarHtml(m.displayName, m.userId)}
+              ${avatarHtml(m.displayName, m.userId, m.color)}
               <div class="chat-body">
                 <div class="chat-head">
                   <span class="chat-name">${nameWithPoints(m.displayName, m.userId)}</span>
@@ -1400,7 +1404,16 @@
         const allByDate = {};
         const rawCounts = {};
         workouts.forEach((w) => {
-          (byDate[w.performedOn] ??= new Set()).add(w.userId);
+          const dayMap = (byDate[w.performedOn] ??= new Map());
+          if (!dayMap.has(w.userId)) {
+            const person = byId[w.userId];
+            // Prefer the workout's own denormalized name/color -- a cross-posting
+            // linked-crew member won't be found in this crew's own roster (byId).
+            dayMap.set(w.userId, {
+              name: w.displayName || (person ? person.displayName : '?'),
+              color: w.color ?? person?.color,
+            });
+          }
           rawCounts[w.userId] = (rawCounts[w.userId] || 0) + 1;
         });
         allWorkouts.forEach((w) => { (allByDate[w.performedOn] ??= []).push(w); });
@@ -1435,9 +1448,8 @@
         for (let i = 0; i < firstWeekday; i++) cells.push('<div class="cal-cell empty"></div>');
         for (let day = 1; day <= lastDay; day++) {
           const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
-          const dots = [...(byDate[dateStr] || [])].map((id) => {
-            const name = byId[id] ? byId[id].displayName : '?';
-            return `<div class="cal-dot" style="background:${avatarColor(name, byId[id]?.color)}">${escapeHtml(firstInitial(name))}</div>`;
+          const dots = [...(byDate[dateStr]?.values() ?? [])].map(({ name, color }) => {
+            return `<div class="cal-dot" style="background:${avatarColor(name, color)}">${escapeHtml(firstInitial(name))}</div>`;
           }).join('');
           cells.push(`
             <div class="cal-cell" data-date="${dateStr}">
