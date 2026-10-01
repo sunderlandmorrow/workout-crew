@@ -281,6 +281,24 @@
       padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; cursor: pointer;
     }
     .kudos-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .row-menu-wrap { position: relative; margin-left: auto; }
+    .row-menu-btn {
+      border: 1px solid var(--line); background: var(--bg); color: var(--muted);
+      padding: 4px 10px; font-size: 0.9rem; line-height: 1; border-radius: 12px; cursor: pointer;
+    }
+    .row-menu {
+      display: none;
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+      background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+      padding: 6px; min-width: 120px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    .row-menu.open { display: block; }
+    .row-menu button {
+      width: 100%; text-align: left; background: none; border: none;
+      padding: 8px 10px; font-size: 0.85rem; color: var(--ink); cursor: pointer; border-radius: 4px; white-space: nowrap;
+    }
+    .row-menu button:hover { background: var(--bg); }
     .comment-section { flex: 1 0 100%; margin-top: 4px; padding-left: 48px; }
     .comment-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
     .comment-row { display: flex; align-items: flex-start; gap: 8px; }
@@ -658,6 +676,47 @@
           </div>
         </div>
 
+        <div class="modal-backdrop" id="edit-workout-backdrop">
+          <div class="modal-panel">
+            <h2 class="caps">Edit check-in</h2>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Type</div>
+              <input type="text" id="edit-workout-type" maxlength="40">
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Notes</div>
+              <textarea id="edit-workout-notes" placeholder="Optional" maxlength="1000"></textarea>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">Duration</div>
+              <div class="duration-inputs">
+                <input type="number" id="edit-workout-hours" min="0" max="24" value="0">
+                <span>:</span>
+                <input type="number" id="edit-workout-minutes" min="0" max="59" value="0">
+              </div>
+              <div class="duration-labels caps"><span>Hours</span><span>Minutes</span></div>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-label caps">How did it feel?</div>
+              <div class="rating-inputs">
+                <input type="range" id="edit-workout-rating" min="1" max="5" step="1" value="3">
+                <span class="rating-value" id="edit-workout-rating-value"></span>
+              </div>
+            </div>
+
+            <p class="error" id="edit-workout-error"></p>
+
+            <div class="modal-close-row" style="justify-content: space-between;">
+              <button type="button" class="link" id="edit-workout-cancel-btn">Cancel</button>
+              <button type="button" class="caps" id="edit-workout-save-btn" style="width:auto; padding: 8px 18px;">Save changes</button>
+            </div>
+          </div>
+        </div>
+
         <div class="tabs">
           <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
           <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
@@ -921,6 +980,15 @@
       document.addEventListener('click', closePopoverOnOutsideClick);
       cleanup.push(() => document.removeEventListener('click', closePopoverOnOutsideClick));
 
+      // Per-check-in "..." menu (Edit/Delete): closes on any click outside it,
+      // same pattern as the avatar popover above.
+      const closeRowMenusOnOutsideClick = (e) => {
+        if (e.target.closest('.row-menu-wrap')) return;
+        document.querySelectorAll('.row-menu.open').forEach((m) => m.classList.remove('open'));
+      };
+      document.addEventListener('click', closeRowMenusOnOutsideClick);
+      cleanup.push(() => document.removeEventListener('click', closeRowMenusOnOutsideClick));
+
       const settingsBackdrop = document.getElementById('settings-modal-backdrop');
       function openSettings() {
         avatarPopover.classList.remove('open');
@@ -986,6 +1054,69 @@
       extraActivityBackdrop.addEventListener('click', (e) => { if (e.target === extraActivityBackdrop) closeExtraActivityPrompt(null); });
       extraActivityInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); document.getElementById('extra-activity-ok-btn').click(); }
+      });
+
+      // ---- edit a check-in (from its "..." menu) ----
+      let editingWorkoutId = null;
+      const editWorkoutBackdrop = document.getElementById('edit-workout-backdrop');
+      const editWorkoutType = document.getElementById('edit-workout-type');
+      const editWorkoutNotes = document.getElementById('edit-workout-notes');
+      const editWorkoutHours = document.getElementById('edit-workout-hours');
+      const editWorkoutMinutes = document.getElementById('edit-workout-minutes');
+      const editWorkoutRating = document.getElementById('edit-workout-rating');
+      const editWorkoutRatingValue = document.getElementById('edit-workout-rating-value');
+      const editWorkoutError = document.getElementById('edit-workout-error');
+
+      function renderEditWorkoutRatingValue() {
+        editWorkoutRatingValue.textContent = `${editWorkoutRating.value} — ${RATING_LABELS[Number(editWorkoutRating.value) - 1]}`;
+      }
+      editWorkoutRating.addEventListener('input', renderEditWorkoutRatingValue);
+
+      async function openEditWorkoutModal(workoutId) {
+        const w = await api.getWorkout(workoutId);
+        if (!w) return;
+        editingWorkoutId = w.id;
+        // Raw stored value (e.g. "chest,triceps"), not the parsed display label --
+        // the label doesn't round-trip back into the comma-joined tag format.
+        editWorkoutType.value = w.type;
+        editWorkoutNotes.value = w.notes || '';
+        editWorkoutHours.value = Math.floor((w.durationMin || 0) / 60);
+        editWorkoutMinutes.value = (w.durationMin || 0) % 60;
+        editWorkoutRating.value = w.rating || 3;
+        renderEditWorkoutRatingValue();
+        editWorkoutError.textContent = '';
+        editWorkoutBackdrop.classList.add('open');
+      }
+      function closeEditWorkoutModal() {
+        editWorkoutBackdrop.classList.remove('open');
+        editingWorkoutId = null;
+      }
+      document.getElementById('edit-workout-cancel-btn').addEventListener('click', closeEditWorkoutModal);
+      editWorkoutBackdrop.addEventListener('click', (e) => { if (e.target === editWorkoutBackdrop) closeEditWorkoutModal(); });
+
+      document.getElementById('edit-workout-save-btn').addEventListener('click', async () => {
+        editWorkoutError.textContent = '';
+        const type = editWorkoutType.value.trim();
+        if (!type) { editWorkoutError.textContent = 'Type cannot be empty.'; return; }
+        const hours = Number(editWorkoutHours.value) || 0;
+        const minutes = Number(editWorkoutMinutes.value) || 0;
+        const btn = document.getElementById('edit-workout-save-btn');
+        btn.disabled = true;
+        try {
+          await api.updateWorkout(editingWorkoutId, {
+            type,
+            notes: editWorkoutNotes.value,
+            durationMin: hours * 60 + minutes,
+            rating: Number(editWorkoutRating.value),
+          });
+          closeEditWorkoutModal();
+          loadRankings();
+          loadCalendarMonth();
+        } catch (err) {
+          editWorkoutError.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
       });
 
       // ---- also post workouts to another crew ----
@@ -1319,7 +1450,15 @@
             <div class="feed-actions">
               <button type="button" class="kudos-btn${w.kudoedByMe ? ' active' : ''}" data-action="kudos">👍 <span class="kudos-count">${w.kudosCount || ''}</span></button>
               <button type="button" class="comment-toggle-btn" data-action="toggle-comments">💬 Comment</button>
-              ${w.isMine ? `<button type="button" class="comment-toggle-btn" data-action="delete-workout" style="margin-left:auto;">🗑 Delete</button>` : ''}
+              ${w.isMine ? `
+                <div class="row-menu-wrap">
+                  <button type="button" class="row-menu-btn" data-action="toggle-menu">⋯</button>
+                  <div class="row-menu">
+                    <button type="button" data-action="edit-workout">Edit</button>
+                    <button type="button" data-action="delete-workout">Delete</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
             <div class="comment-section" style="display:none;">
               <div class="comment-list"></div>
@@ -1421,8 +1560,25 @@
             return;
           }
 
+          const menuBtn = e.target.closest('[data-action="toggle-menu"]');
+          if (menuBtn) {
+            const menu = row.querySelector('.row-menu');
+            const wasOpen = menu.classList.contains('open');
+            document.querySelectorAll('.row-menu.open').forEach((m) => m.classList.remove('open'));
+            menu.classList.toggle('open', !wasOpen);
+            return;
+          }
+
+          const editBtn = e.target.closest('[data-action="edit-workout"]');
+          if (editBtn) {
+            row.querySelector('.row-menu').classList.remove('open');
+            openEditWorkoutModal(workoutId);
+            return;
+          }
+
           const deleteBtn = e.target.closest('[data-action="delete-workout"]');
           if (deleteBtn) {
+            row.querySelector('.row-menu').classList.remove('open');
             if (!window.confirm("Delete this check-in? This can't be undone.")) return;
             deleteBtn.disabled = true;
             try {
