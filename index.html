@@ -1118,7 +1118,6 @@
                 selectedTags.clear();
                 pick.tags.forEach((t) => selectedTags.add(t));
                 renderGroupSelection();
-                submitCheckin(activity);
                 return;
               }
               const isSelected = sameTags(pick.tags);
@@ -1143,9 +1142,6 @@
                 extraActivity = activity;
                 selectedTags.clear();
                 selectedTags.add('extra');
-                renderGroupSelection();
-                submitCheckin(activity);
-                return;
               } else if (tag.id === 'rest') {
                 selectedTags.clear();
                 selectedTags.add('rest');
@@ -1168,10 +1164,16 @@
           [...groupRow.children].forEach((btn) => {
             const pick = STRUCTURED_PICKS.find((p) => p.id === btn.dataset.pickId);
             btn.classList.toggle('selected', sameTags(pick.tags));
+            if (pick.id === 'extra-day') {
+              btn.textContent = extraActivity ? `Extracurricular: ${extraActivity}` : pick.label;
+            }
           });
         } else {
           [...groupRow.children].forEach((btn) => {
             btn.classList.toggle('selected', selectedTags.has(btn.dataset.tagId));
+            if (btn.dataset.tagId === 'extra') {
+              btn.textContent = extraActivity ? `Extracurricular: ${extraActivity}` : 'Extracurricular';
+            }
           });
         }
         renderVariantSection();
@@ -1217,11 +1219,13 @@
       renderRatingValue();
 
       const logError = document.getElementById('log-error');
-
-      // Shared by the Log button and by the "Extracurricular" prompt, which posts
-      // the check-in immediately once you confirm what you did (no separate Log tap).
-      async function submitCheckin(type) {
+      document.getElementById('log-btn').addEventListener('click', async () => {
         logError.textContent = '';
+        if (!selectedTags.size) {
+          logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
+          return;
+        }
+        const type = selectedTags.has('extra') ? extraActivity : tagsToType([...selectedTags]);
         const hours = Number(document.getElementById('hours').value) || 0;
         const minutes = Number(document.getElementById('minutes').value) || 0;
         const notes = document.getElementById('notes').value;
@@ -1253,16 +1257,6 @@
         } finally {
           btn.disabled = false;
         }
-      }
-
-      document.getElementById('log-btn').addEventListener('click', () => {
-        logError.textContent = '';
-        if (!selectedTags.size) {
-          logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
-          return;
-        }
-        const type = selectedTags.has('extra') ? extraActivity : tagsToType([...selectedTags]);
-        submitCheckin(type);
       });
 
       // ---- ranking points: 10 per logged workout, 0 for rest, all-time ----
