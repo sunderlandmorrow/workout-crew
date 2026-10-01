@@ -223,24 +223,38 @@
     .rating-value { font-size: 0.85rem; font-weight: 700; min-width: 70px; text-align: right; }
     .log-btn { flex: 1 1 160px; align-self: stretch; }
 
-    /* ---- tabs ---- */
-    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    /* ---- tabs (horizontally scrollable so more can be added later) ---- */
+    .tabs-wrap { position: relative; margin-bottom: 20px; }
+    .tabs {
+      display: flex; gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab-btn {
-      flex: 1 1 0;
-      min-width: 0;
+      flex: none;
+      white-space: nowrap;
       border: 1px solid var(--line);
       background: var(--bg);
       color: var(--ink);
-      padding: 8px 8px;
+      padding: 8px 18px;
       font-size: 0.78rem;
       border-radius: 4px;
       cursor: pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: center;
     }
     .tab-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    /* Fades at either edge hint there's more to scroll to; only shown while
+       there's actually content that way (toggled in JS as you scroll). */
+    .tabs-wrap::before, .tabs-wrap::after {
+      content: ''; position: absolute; top: 0; bottom: 0; width: 28px;
+      pointer-events: none; opacity: 0; transition: opacity 0.15s ease; z-index: 2;
+    }
+    .tabs-wrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+    .tabs-wrap::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
+    .tabs-wrap.can-scroll-left::before { opacity: 1; }
+    .tabs-wrap.can-scroll-right::after { opacity: 1; }
 
     .crew-switcher { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
     .crew-switch-btn {
@@ -628,7 +642,6 @@
               </button>
               <div class="avatar-popover" id="avatar-popover">
                 <button type="button" class="caps" id="open-settings-btn">Settings</button>
-                <button type="button" class="caps" id="tab-btn-crews">Workout Crews</button>
               </div>
             </div>
             <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
@@ -717,11 +730,14 @@
           </div>
         </div>
 
-        <div class="tabs">
-          <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
-          <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
-          <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
-          <button class="tab-btn caps" id="tab-btn-weight">Weight</button>
+        <div class="tabs-wrap" id="tabs-wrap">
+          <div class="tabs" id="tabs-scroll">
+            <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
+            <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
+            <button class="tab-btn caps" id="tab-btn-calendar">Calendar</button>
+            <button class="tab-btn caps" id="tab-btn-weight">Weight</button>
+            <button class="tab-btn caps" id="tab-btn-crews">Workout Crews</button>
+          </div>
         </div>
 
         <div id="tab-crews" style="display:none;">
@@ -1171,14 +1187,27 @@
         if (name === 'weight') loadWeightTab();
         if (name === 'chat') chatList.scrollTop = chatList.scrollHeight;
       }
-      tabs.crews.btn.addEventListener('click', () => {
-        avatarPopover.classList.remove('open');
-        showTab('crews');
-      });
+      tabs.crews.btn.addEventListener('click', () => showTab('crews'));
       tabs.checkin.btn.addEventListener('click', () => showTab('checkin'));
       tabs.chat.btn.addEventListener('click', () => showTab('chat'));
       tabs.calendar.btn.addEventListener('click', () => showTab('calendar'));
       tabs.weight.btn.addEventListener('click', () => showTab('weight'));
+
+      // ---- tabs row scroll cues (fades at either edge while there's more to scroll to) ----
+      const tabsWrap = document.getElementById('tabs-wrap');
+      const tabsScroll = document.getElementById('tabs-scroll');
+      function updateTabsScrollCues() {
+        tabsWrap.classList.toggle('can-scroll-left', tabsScroll.scrollLeft > 2);
+        tabsWrap.classList.toggle('can-scroll-right',
+          tabsScroll.scrollLeft < tabsScroll.scrollWidth - tabsScroll.clientWidth - 2);
+      }
+      tabsScroll.addEventListener('scroll', updateTabsScrollCues);
+      window.addEventListener('resize', updateTabsScrollCues);
+      cleanup.push(() => {
+        tabsScroll.removeEventListener('scroll', updateTabsScrollCues);
+        window.removeEventListener('resize', updateTabsScrollCues);
+      });
+      updateTabsScrollCues();
 
       // ---- Workout Crews (browse every crew that exists) ----
       async function loadCrewsTab() {
