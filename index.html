@@ -1829,7 +1829,6 @@
 
       // ---- calendar (month view) ----
       const calState = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
-      const CAL_START_YEAR = calState.year, CAL_START_MONTH = calState.month; // don't allow browsing before now
       const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
       const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1968,7 +1967,6 @@
         }
         grid.innerHTML = cells.join('');
         document.getElementById('cal-next').disabled = atCompetitionCap();
-        document.getElementById('cal-prev').disabled = atStartCap();
 
         [...grid.children].forEach((cell) => {
           if (cell.classList.contains('empty')) return;
@@ -1997,10 +1995,8 @@
       })();
       const [compYear, compMonth] = (crew.competitionDate || fallbackCompDate).split('-').map(Number); // compMonth is 1-indexed
       const atCompetitionCap = () => calState.year > compYear || (calState.year === compYear && calState.month >= compMonth - 1);
-      const atStartCap = () => calState.year < CAL_START_YEAR || (calState.year === CAL_START_YEAR && calState.month <= CAL_START_MONTH);
 
       document.getElementById('cal-prev').addEventListener('click', () => {
-        if (atStartCap()) return;
         calState.month -= 1;
         if (calState.month < 0) { calState.month = 11; calState.year -= 1; }
         loadCalendarMonth();
