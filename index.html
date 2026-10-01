@@ -1319,6 +1319,7 @@
             <div class="feed-actions">
               <button type="button" class="kudos-btn${w.kudoedByMe ? ' active' : ''}" data-action="kudos">👍 <span class="kudos-count">${w.kudosCount || ''}</span></button>
               <button type="button" class="comment-toggle-btn" data-action="toggle-comments">💬 Comment</button>
+              ${w.isMine ? `<button type="button" class="comment-toggle-btn" data-action="delete-workout" style="margin-left:auto;">🗑 Delete</button>` : ''}
             </div>
             <div class="comment-section" style="display:none;">
               <div class="comment-list"></div>
@@ -1416,6 +1417,21 @@
               section.style.display = '';
               expanded.add(workoutId);
               subscribe(workoutId, row);
+            }
+            return;
+          }
+
+          const deleteBtn = e.target.closest('[data-action="delete-workout"]');
+          if (deleteBtn) {
+            if (!window.confirm("Delete this check-in? This can't be undone.")) return;
+            deleteBtn.disabled = true;
+            try {
+              await api.deleteWorkout(workoutId);
+              row.remove();
+              loadRankings();
+            } catch (err) {
+              deleteBtn.disabled = false;
+              window.alert(err.message);
             }
           }
         });
