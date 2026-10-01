@@ -739,8 +739,6 @@
 
         <div id="tab-crews" style="display:none;">
           <div class="card card-calendar">
-            <div class="step-label caps" id="crew-switcher-label" style="display:none; text-align:center;">Active crews you're in</div>
-            <div class="crew-switcher" id="crew-switcher" style="display:none;"></div>
             <h2 class="caps">Workout Crews</h2>
             <div id="crews-list"><p class="empty">Loading…</p></div>
           </div>
@@ -915,11 +913,7 @@
 
       document.getElementById('signout').addEventListener('click', () => api.logout());
 
-      // ---- crew switcher (home crew + any linked crews) ----
-      function switchToCrew(targetCrew) {
-        teardown();
-        renderDashboard(member, targetCrew);
-      }
+      // ---- crews you're in (home + linked) -- used by the "Post to" picker ----
       async function loadMyCrews() {
         // myCrewLinks() never includes the home crew, but `crew` (the currently
         // active one) might BE a linked crew, not home -- always resolve the true
@@ -930,25 +924,6 @@
           api.myCrewLinks(),
         ]);
         myCrews = [homeCrew, ...links];
-        const switcher = document.getElementById('crew-switcher');
-        const switcherLabel = document.getElementById('crew-switcher-label');
-        if (myCrews.length > 1) {
-          switcher.style.display = '';
-          switcherLabel.style.display = '';
-          switcher.innerHTML = myCrews.map((c) => `
-            <button type="button" class="crew-switch-btn caps ${c.id === crew.id ? 'active' : ''}" data-crew-id="${escapeHtml(c.id)}">${escapeHtml(c.name)}</button>
-          `).join('');
-          [...switcher.children].forEach((btn) => {
-            btn.addEventListener('click', () => {
-              if (btn.dataset.crewId === crew.id) return;
-              const target = myCrews.find((c) => c.id === btn.dataset.crewId);
-              if (target) switchToCrew(target);
-            });
-          });
-        } else {
-          switcher.style.display = 'none';
-          switcherLabel.style.display = 'none';
-        }
         renderPostToSelector();
       }
       loadMyCrews();
