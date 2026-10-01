@@ -605,22 +605,11 @@
             </div>
 
             <div class="modal-section">
-              <div class="modal-section-label caps">Lift mode</div>
-              <div class="lift-toggle-row">
-                <span class="lift-toggle-label" id="lift-label-open">Open Lift</span>
-                <button type="button" class="lift-switch" id="lift-switch" role="switch">
-                  <span class="lift-switch-knob"></span>
-                </button>
-                <span class="lift-toggle-label" id="lift-label-structured">Structured Lift</span>
-              </div>
-            </div>
-
-            <div class="modal-section">
               <div class="modal-section-label caps">Also post workouts to another crew</div>
               <div id="crew-links-list" style="font-size:0.82rem; color:var(--muted); margin-bottom:8px;"></div>
               <div class="row" style="gap:8px; flex-wrap:nowrap;">
                 <input type="text" id="crew-link-input" placeholder="Crew ID" style="flex:1;">
-                <button type="button" class="caps" id="crew-link-btn" style="width:auto; padding:8px 14px;">Add</button>
+                <button type="button" class="caps" id="crew-link-btn" style="width:auto; padding:8px 14px;">Join crew with ID</button>
               </div>
               <p class="error" id="crew-link-error"></p>
             </div>
@@ -648,6 +637,14 @@
         <div id="tab-checkin">
           <div class="card card-checkin">
             <h2 class="caps">Check in</h2>
+
+            <div class="lift-toggle-row" style="margin-bottom: 20px;">
+              <span class="lift-toggle-label" id="lift-label-open">Open Lift</span>
+              <button type="button" class="lift-switch" id="lift-switch" role="switch">
+                <span class="lift-switch-knob"></span>
+              </button>
+              <span class="lift-toggle-label" id="lift-label-structured">Structured Lift</span>
+            </div>
 
             <div class="step-label caps" id="group-row-label">1. What did you hit today?</div>
             <div class="group-row" id="group-row"></div>
@@ -997,7 +994,7 @@
           list.innerHTML = ranked.map((c) => `
             <div class="feed-row">
               <div class="feed-name">${escapeHtml(c.name)} <span class="points">[${c.totalPoints}]</span>${c.id === crew.id ? ' <span class="points">(viewing)</span>' : ''}</div>
-              <div class="feed-meta">${c.memberCount} ${c.memberCount === 1 ? 'person' : 'people'}</div>
+              <div class="feed-meta">${c.memberCount} ${c.memberCount === 1 ? 'person' : 'people'} &middot; ID: ${escapeHtml(c.id)}</div>
               ${c.memberNames.length ? `<div class="feed-exercises">${c.memberNames.map(escapeHtml).join(', ')}</div>` : ''}
             </div>
           `).join('') || '<p class="empty">No crews yet.</p>';
