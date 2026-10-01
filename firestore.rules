@@ -108,7 +108,7 @@ service cloud.firestore {
     }
 
     function validLiftMode(m) {
-      return m == 'open' || m == 'structured';
+      return m == 'open' || m == 'structured' || m == 'extra';
     }
 
     function validProfileUpdate(uid) {

@@ -11,9 +11,9 @@ export function isDate(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
-const LIFT_MODES = ['open', 'structured'];
+const LIFT_MODES = ['open', 'structured', 'extra'];
 export function liftMode(v) {
-  if (!LIFT_MODES.includes(v)) throw bad('Lift mode must be "open" or "structured"');
+  if (!LIFT_MODES.includes(v)) throw bad('Lift mode must be "open", "structured", or "extra"');
   return v;
 }
 
