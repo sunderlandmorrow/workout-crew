@@ -12,6 +12,7 @@ export const MUSCLE_TAGS = [
   { id: 'traps', label: 'Traps' },
   { id: 'abs', label: 'Abs' },
   { id: 'cardio', label: 'Cardio' },
+  { id: 'extra', label: 'Extracurricular' },
   { id: 'rest', label: 'Rest' },
 ];
 
@@ -24,7 +25,7 @@ export function tagsToType(tagIds) {
 export function parseType(type) {
   const ids = String(type || '').split(',').filter(Boolean);
   if (!ids.length) return { label: 'Workout' };
-  return { label: ids.map((id) => LABEL_BY_ID[id] || id).join(' + ') };
+  return { label: ids.map((id) => LABEL_BY_ID[id] || (id.charAt(0).toUpperCase() + id.slice(1))).join(' + ') };
 }
 
 // Structured Lift mode: a generic 4-day split. Each "day" is really just a

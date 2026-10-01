@@ -132,19 +132,20 @@
     .modal-section-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.06em; }
     .modal-close-row { display: flex; justify-content: flex-end; margin-top: 20px; }
 
-    .lift-mode-row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .lift-mode-btn {
-      flex: 1 1 100px;
-      border: 1px solid var(--line);
-      background: var(--bg);
-      color: var(--ink);
-      padding: 10px 6px;
-      font-size: 0.75rem;
-      letter-spacing: 0.05em;
-      border-radius: 4px;
-      cursor: pointer;
+    .lift-toggle-row { display: flex; align-items: center; gap: 12px; }
+    .lift-toggle-label { font-size: 0.82rem; }
+    .lift-toggle-label.active { font-weight: 700; }
+    .lift-switch {
+      position: relative; width: 46px; height: 26px; flex: none;
+      border-radius: 13px; border: 1px solid var(--line);
+      background: var(--bg); cursor: pointer; padding: 0;
     }
-    .lift-mode-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .lift-switch-knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--ink); transition: left 0.15s ease;
+    }
+    .lift-switch.on .lift-switch-knob { left: 22px; background: var(--accent); }
 
     /* ---- dashboard header ---- */
     header.app-header {
@@ -643,6 +644,20 @@
           </div>
         </div>
 
+        <div class="modal-backdrop" id="extra-activity-backdrop">
+          <div class="modal-panel">
+            <h2 class="caps">What did you do?</h2>
+            <div class="modal-section">
+              <input type="text" id="extra-activity-input" placeholder="e.g. Yoga, Pilates, a hike" maxlength="60">
+            </div>
+            <p class="error" id="extra-activity-error"></p>
+            <div class="modal-close-row" style="justify-content: space-between;">
+              <button type="button" class="link" id="extra-activity-cancel-btn">Cancel</button>
+              <button type="button" class="caps" id="extra-activity-ok-btn" style="width:auto; padding: 8px 18px;">OK</button>
+            </div>
+          </div>
+        </div>
+
         <div class="tabs">
           <button class="tab-btn caps active" id="tab-btn-checkin">Check In</button>
           <button class="tab-btn caps" id="tab-btn-chat">Chat</button>
@@ -661,10 +676,12 @@
           <div class="card card-checkin">
             <h2 class="caps">Check in</h2>
 
-            <div class="lift-mode-row" id="lift-mode-row" style="margin-bottom: 20px;">
-              <button type="button" class="lift-mode-btn caps" data-mode="open">Open Lift</button>
-              <button type="button" class="lift-mode-btn caps" data-mode="structured">Structured Lift</button>
-              <button type="button" class="lift-mode-btn caps" data-mode="extra">Extracurricular</button>
+            <div class="lift-toggle-row" style="margin-bottom: 20px;">
+              <span class="lift-toggle-label" id="lift-label-open">Open Lift</span>
+              <button type="button" class="lift-switch" id="lift-switch" role="switch">
+                <span class="lift-switch-knob"></span>
+              </button>
+              <span class="lift-toggle-label" id="lift-label-structured">Structured Lift</span>
             </div>
 
             <div class="step-label caps" id="group-row-label">1. What did you hit today?</div>
@@ -917,34 +934,58 @@
 
       document.getElementById('change-photo-btn').addEventListener('click', () => avatarInput.click());
 
-      const liftModeButtons = [...document.querySelectorAll('.lift-mode-btn')];
-      function renderLiftModeButtons() {
-        liftModeButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === liftMode));
+      const liftSwitch = document.getElementById('lift-switch');
+      const liftLabelOpen = document.getElementById('lift-label-open');
+      const liftLabelStructured = document.getElementById('lift-label-structured');
+      function renderLiftSwitch() {
+        liftSwitch.classList.toggle('on', liftMode === 'structured');
+        liftSwitch.setAttribute('aria-checked', String(liftMode === 'structured'));
+        liftLabelOpen.classList.toggle('active', liftMode === 'open');
+        liftLabelStructured.classList.toggle('active', liftMode === 'structured');
       }
-      liftModeButtons.forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const mode = btn.dataset.mode;
-          if (mode === 'extra') {
-            const activity = window.prompt('What did you do? (e.g. Yoga, Pilates, a hike)', extraActivity);
-            if (!activity || !activity.trim()) return; // cancelled or left blank
-            extraActivity = activity.trim().slice(0, 60);
-            renderCheckinPicker();
-          }
-          if (mode === liftMode) return;
-          const previousMode = liftMode;
-          // Flip immediately so it feels instant; roll back only if the save fails.
-          liftMode = mode;
-          renderLiftModeButtons();
+      liftSwitch.addEventListener('click', async () => {
+        const previousMode = liftMode;
+        const newMode = liftMode === 'open' ? 'structured' : 'open';
+        // Flip immediately so the switch feels instant; roll back only if the save fails.
+        liftMode = newMode;
+        renderLiftSwitch();
+        renderCheckinPicker();
+        try {
+          await api.setLiftMode(newMode);
+        } catch (err) {
+          liftMode = previousMode;
+          renderLiftSwitch();
           renderCheckinPicker();
-          try {
-            await api.setLiftMode(mode);
-          } catch (err) {
-            liftMode = previousMode;
-            renderLiftModeButtons();
-            renderCheckinPicker();
-            window.alert(err.message);
-          }
-        });
+          window.alert(err.message);
+        }
+      });
+
+      // ---- "Extracurricular" tag: asks what you did via a themed modal (not
+      // window.prompt, so it matches the app's colors) instead of a muscle pick. ----
+      const extraActivityBackdrop = document.getElementById('extra-activity-backdrop');
+      const extraActivityInput = document.getElementById('extra-activity-input');
+      const extraActivityError = document.getElementById('extra-activity-error');
+      let extraActivityResolve = null;
+      function promptExtraActivity(currentValue) {
+        extraActivityInput.value = currentValue || '';
+        extraActivityError.textContent = '';
+        extraActivityBackdrop.classList.add('open');
+        extraActivityInput.focus();
+        return new Promise((resolve) => { extraActivityResolve = resolve; });
+      }
+      function closeExtraActivityPrompt(result) {
+        extraActivityBackdrop.classList.remove('open');
+        if (extraActivityResolve) { extraActivityResolve(result); extraActivityResolve = null; }
+      }
+      document.getElementById('extra-activity-ok-btn').addEventListener('click', () => {
+        const text = extraActivityInput.value.trim();
+        if (!text) { extraActivityError.textContent = 'Describe what you did.'; return; }
+        closeExtraActivityPrompt(text.slice(0, 60));
+      });
+      document.getElementById('extra-activity-cancel-btn').addEventListener('click', () => closeExtraActivityPrompt(null));
+      extraActivityBackdrop.addEventListener('click', (e) => { if (e.target === extraActivityBackdrop) closeExtraActivityPrompt(null); });
+      extraActivityInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('extra-activity-ok-btn').click(); }
       });
 
       // ---- also post workouts to another crew ----
@@ -1049,6 +1090,7 @@
       const STRUCTURED_PICKS = [
         ...SPLIT_DAYS,
         { id: 'cardio-day', label: 'Cardio', tags: ['cardio'] },
+        { id: 'extra-day', label: 'Extracurricular', tags: ['extra'] },
         { id: 'rest-day', label: 'Rest', tags: ['rest'] },
       ];
       const sameTags = (tags) => tags.length === selectedTags.size && tags.every((t) => selectedTags.has(t));
@@ -1060,13 +1102,6 @@
         selectedTags.clear();
         selectedVariant = null;
 
-        if (liftMode === 'extra') {
-          groupRowLabel.textContent = extraActivity ? `1. Today: ${extraActivity}` : '1. What did you do?';
-          groupRow.innerHTML = `<p class="empty">Tap "Extracurricular" above to ${extraActivity ? 'change it' : 'describe it'}.</p>`;
-          renderGroupSelection();
-          return;
-        }
-
         if (liftMode === 'structured') {
           groupRowLabel.textContent = '1. What do you want to hit today?';
           STRUCTURED_PICKS.forEach((pick) => {
@@ -1075,7 +1110,16 @@
             btn.className = 'group-btn caps';
             btn.textContent = pick.label;
             btn.dataset.pickId = pick.id;
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+              if (pick.id === 'extra-day') {
+                const activity = await promptExtraActivity(extraActivity);
+                if (!activity) return; // cancelled or left blank
+                extraActivity = activity;
+                selectedTags.clear();
+                pick.tags.forEach((t) => selectedTags.add(t));
+                renderGroupSelection();
+                return;
+              }
               const isSelected = sameTags(pick.tags);
               selectedTags.clear();
               if (!isSelected) pick.tags.forEach((t) => selectedTags.add(t));
@@ -1091,12 +1135,19 @@
             btn.className = 'group-btn caps';
             btn.textContent = tag.label;
             btn.dataset.tagId = tag.id;
-            btn.addEventListener('click', () => {
-              if (tag.id === 'rest') {
+            btn.addEventListener('click', async () => {
+              if (tag.id === 'extra') {
+                const activity = await promptExtraActivity(extraActivity);
+                if (!activity) return; // cancelled or left blank
+                extraActivity = activity;
+                selectedTags.clear();
+                selectedTags.add('extra');
+              } else if (tag.id === 'rest') {
                 selectedTags.clear();
                 selectedTags.add('rest');
               } else {
                 selectedTags.delete('rest');
+                selectedTags.delete('extra');
                 if (selectedTags.has(tag.id)) selectedTags.delete(tag.id);
                 else selectedTags.add(tag.id);
               }
@@ -1109,10 +1160,6 @@
       }
 
       function renderGroupSelection() {
-        if (liftMode === 'extra') {
-          renderVariantSection();
-          return;
-        }
         if (liftMode === 'structured') {
           [...groupRow.children].forEach((btn) => {
             const pick = STRUCTURED_PICKS.find((p) => p.id === btn.dataset.pickId);
@@ -1153,7 +1200,7 @@
         });
       });
 
-      renderLiftModeButtons();
+      renderLiftSwitch();
       renderCheckinPicker();
 
       const RATING_LABELS = ['Rough', 'Tough', 'OK', 'Good', 'Crushed it'];
@@ -1168,20 +1215,11 @@
       const logError = document.getElementById('log-error');
       document.getElementById('log-btn').addEventListener('click', async () => {
         logError.textContent = '';
-        let type;
-        if (liftMode === 'extra') {
-          if (!extraActivity) {
-            logError.textContent = 'Tap "Extracurricular" above and describe what you did.';
-            return;
-          }
-          type = extraActivity;
-        } else {
-          if (!selectedTags.size) {
-            logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
-            return;
-          }
-          type = tagsToType([...selectedTags]);
+        if (!selectedTags.size) {
+          logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
+          return;
         }
+        const type = selectedTags.has('extra') ? extraActivity : tagsToType([...selectedTags]);
         const hours = Number(document.getElementById('hours').value) || 0;
         const minutes = Number(document.getElementById('minutes').value) || 0;
         const notes = document.getElementById('notes').value;
@@ -1202,7 +1240,7 @@
           selectedTags.clear();
           selectedVariant = null;
           extraActivity = '';
-          if (liftMode === 'extra') renderCheckinPicker(); else renderGroupSelection();
+          renderGroupSelection();
           document.getElementById('notes').value = '';
           document.getElementById('hours').value = 0;
           document.getElementById('minutes').value = 0;
@@ -1700,6 +1738,7 @@
       const addWorkoutRating = document.getElementById('add-workout-rating');
       const addWorkoutRatingValue = document.getElementById('add-workout-rating-value');
       let addWorkoutDate = null;
+      let addWorkoutExtraActivity = '';
 
       MUSCLE_TAGS.forEach((tag) => {
         const btn = document.createElement('button');
@@ -1707,12 +1746,19 @@
         btn.className = 'group-btn caps';
         btn.textContent = tag.label;
         btn.dataset.tagId = tag.id;
-        btn.addEventListener('click', () => {
-          if (tag.id === 'rest') {
+        btn.addEventListener('click', async () => {
+          if (tag.id === 'extra') {
+            const activity = await promptExtraActivity(addWorkoutExtraActivity);
+            if (!activity) return; // cancelled or left blank
+            addWorkoutExtraActivity = activity;
+            addWorkoutTags.clear();
+            addWorkoutTags.add('extra');
+          } else if (tag.id === 'rest') {
             addWorkoutTags.clear();
             addWorkoutTags.add('rest');
           } else {
             addWorkoutTags.delete('rest');
+            addWorkoutTags.delete('extra');
             if (addWorkoutTags.has(tag.id)) addWorkoutTags.delete(tag.id);
             else addWorkoutTags.add(tag.id);
           }
@@ -1729,6 +1775,7 @@
       function openAddWorkoutModal(dateStr) {
         addWorkoutDate = dateStr;
         addWorkoutTags.clear();
+        addWorkoutExtraActivity = '';
         [...addWorkoutGroupRow.children].forEach((b) => b.classList.remove('selected'));
         document.getElementById('add-workout-notes').value = '';
         document.getElementById('add-workout-hours').value = 0;
@@ -1755,7 +1802,7 @@
         try {
           await api.logWorkout({
             performedOn: addWorkoutDate,
-            type: tagsToType([...addWorkoutTags]),
+            type: addWorkoutTags.has('extra') ? addWorkoutExtraActivity : tagsToType([...addWorkoutTags]),
             durationMin: hours * 60 + minutes,
             notes,
             rating: Number(addWorkoutRating.value),
