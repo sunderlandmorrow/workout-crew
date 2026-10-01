@@ -281,7 +281,7 @@
     .empty { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
 
     .feed-actions { flex: 1 0 100%; display: flex; gap: 10px; }
-    .kudos-btn, .comment-toggle-btn {
+    .kudos-btn {
       border: 1px solid var(--line); background: var(--bg); color: var(--muted);
       padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; cursor: pointer;
     }
@@ -1051,7 +1051,10 @@
         if (extraActivityResolve) { extraActivityResolve(result); extraActivityResolve = null; }
       }
       document.getElementById('extra-activity-ok-btn').addEventListener('click', () => {
-        const text = extraActivityInput.value.trim();
+        // No commas -- the workout "type" field joins muscle tags with commas,
+        // and extracurricular activities can combine with them (e.g. "Pilates"
+        // + Chest & Triceps), so a literal comma here would split wrong later.
+        const text = extraActivityInput.value.trim().replace(/,/g, '');
         if (!text) { extraActivityError.textContent = 'Describe what you did.'; return; }
         closeExtraActivityPrompt(text.slice(0, 60));
       });
@@ -1244,6 +1247,16 @@
       ];
       const sameTags = (tags) => tags.length === selectedTags.size && tags.every((t) => selectedTags.has(t));
 
+      // Builds the workout "type" string from selected tags, folding in a free-text
+      // Extracurricular activity when it's combined with other muscle tags (e.g.
+      // "Pilates" + Chest & Triceps -> "pilates,chest,triceps", which parseType()
+      // renders back as "Pilates + Chest + Triceps").
+      function buildCheckinType(tags, activity) {
+        if (!tags.includes('extra')) return tagsToType(tags);
+        const others = tags.filter((t) => t !== 'extra');
+        return tagsToType([activity.toLowerCase(), ...others]);
+      }
+
       // Rebuilds the picker for the current liftMode: freeform multi-select
       // muscle groups (open) or a single pick from a preset split (structured).
       function renderCheckinPicker() {
@@ -1286,17 +1299,24 @@
             btn.dataset.tagId = tag.id;
             btn.addEventListener('click', async () => {
               if (tag.id === 'extra') {
-                const activity = await promptExtraActivity(extraActivity);
-                if (!activity) return; // cancelled or left blank
-                extraActivity = activity;
-                selectedTags.clear();
-                selectedTags.add('extra');
+                // Combinable with other muscle tags (e.g. "Pilates" + Chest & Triceps),
+                // unlike Rest which stands alone. Tap again to remove it.
+                if (selectedTags.has('extra')) {
+                  selectedTags.delete('extra');
+                  extraActivity = '';
+                } else {
+                  const activity = await promptExtraActivity(extraActivity);
+                  if (!activity) return; // cancelled or left blank
+                  extraActivity = activity;
+                  selectedTags.delete('rest');
+                  selectedTags.add('extra');
+                }
               } else if (tag.id === 'rest') {
                 selectedTags.clear();
+                extraActivity = '';
                 selectedTags.add('rest');
               } else {
                 selectedTags.delete('rest');
-                selectedTags.delete('extra');
                 if (selectedTags.has(tag.id)) selectedTags.delete(tag.id);
                 else selectedTags.add(tag.id);
               }
@@ -1374,7 +1394,7 @@
           logError.textContent = liftMode === 'structured' ? 'Pick what you want to hit today.' : 'Pick at least one muscle group.';
           return;
         }
-        const type = selectedTags.has('extra') ? extraActivity : tagsToType([...selectedTags]);
+        const type = buildCheckinType([...selectedTags], extraActivity);
         const hours = Number(document.getElementById('hours').value) || 0;
         const minutes = Number(document.getElementById('minutes').value) || 0;
         const notes = document.getElementById('notes').value;
@@ -1467,7 +1487,6 @@
             ${exercisesLine ? `<div class="feed-exercises">${exercisesLine}</div>` : ''}
             <div class="feed-actions">
               <button type="button" class="kudos-btn${w.kudoedByMe ? ' active' : ''}" data-action="kudos">👍 <span class="kudos-count">${w.kudosCount || ''}</span></button>
-              <button type="button" class="comment-toggle-btn" data-action="toggle-comments">💬 Comment</button>
               ${w.isMine && showMenu ? `
                 <div class="row-menu-wrap">
                   <button type="button" class="row-menu-btn" data-action="toggle-menu">⋯</button>
@@ -1478,7 +1497,7 @@
                 </div>
               ` : ''}
             </div>
-            <div class="comment-section" style="display:none;">
+            <div class="comment-section">
               <div class="comment-list"></div>
               <form class="comment-form">
                 <input type="text" placeholder="Add a comment..." maxlength="2000">
@@ -1508,10 +1527,9 @@
       // Wires up like/comment clicks for a feed container (today's feed, or the
       // calendar day-detail list) via delegation, so re-rendering the container's
       // innerHTML (a new live snapshot, a different day) doesn't need listeners
-      // reattached per row. Comment threads stay open across a re-render by
-      // tracking which workout ids are expanded and resubscribing after.
+      // reattached per row. Every row's comments are always subscribed/visible
+      // (no tap-to-expand) -- subscribeAll() re-wires them after each re-render.
       function setupFeedInteractions(container) {
-        const expanded = new Set();
         const unsubs = new Map();
 
         function subscribe(workoutId, row) {
@@ -1528,13 +1546,8 @@
           unsubs.clear();
         }
 
-        function reopen() {
-          expanded.forEach((workoutId) => {
-            const row = container.querySelector(`.feed-row[data-workout-id="${workoutId}"]`);
-            if (!row) return;
-            row.querySelector('.comment-section').style.display = '';
-            subscribe(workoutId, row);
-          });
+        function subscribeAll() {
+          container.querySelectorAll('.feed-row').forEach((row) => subscribe(row.dataset.workoutId, row));
         }
 
         container.addEventListener('click', async (e) => {
@@ -1555,23 +1568,6 @@
               kudosBtn.classList.toggle('active', wasActive);
               countEl.textContent = current || '';
               window.alert(err.message);
-            }
-            return;
-          }
-
-          const toggleBtn = e.target.closest('[data-action="toggle-comments"]');
-          if (toggleBtn) {
-            const section = row.querySelector('.comment-section');
-            const isOpen = section.style.display !== 'none';
-            if (isOpen) {
-              section.style.display = 'none';
-              expanded.delete(workoutId);
-              const unsub = unsubs.get(workoutId);
-              if (unsub) { unsub(); unsubs.delete(workoutId); }
-            } else {
-              section.style.display = '';
-              expanded.add(workoutId);
-              subscribe(workoutId, row);
             }
             return;
           }
@@ -1600,6 +1596,8 @@
             try {
               await api.deleteWorkout(workoutId);
               row.remove();
+              const unsub = unsubs.get(workoutId);
+              if (unsub) { unsub(); unsubs.delete(workoutId); }
               loadRankings();
             } catch (err) {
               deleteBtn.disabled = false;
@@ -1629,7 +1627,7 @@
           }
         });
 
-        return { teardownAll, reopen };
+        return { teardownAll, subscribeAll };
       }
 
       const feedInteractions = setupFeedInteractions(document.getElementById('feed-list'));
@@ -1648,7 +1646,7 @@
           return;
         }
         list.innerHTML = todaysWorkouts.map((w) => feedRowHtml(w, byId, { showMenu: false })).join('');
-        feedInteractions.reopen();
+        feedInteractions.subscribeAll();
       }
 
       const unwatchMembers = api.watchFullRoster(crew.id, (m) => { members = m; renderFeed(); });
@@ -1860,7 +1858,7 @@
             : '';
           calDetailInteractions.teardownAll();
           detailEl.innerHTML = heading + rows + hint;
-          calDetailInteractions.reopen();
+          calDetailInteractions.subscribeAll();
         }
 
         const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
@@ -1942,17 +1940,22 @@
         btn.dataset.tagId = tag.id;
         btn.addEventListener('click', async () => {
           if (tag.id === 'extra') {
-            const activity = await promptExtraActivity(addWorkoutExtraActivity);
-            if (!activity) return; // cancelled or left blank
-            addWorkoutExtraActivity = activity;
-            addWorkoutTags.clear();
-            addWorkoutTags.add('extra');
+            if (addWorkoutTags.has('extra')) {
+              addWorkoutTags.delete('extra');
+              addWorkoutExtraActivity = '';
+            } else {
+              const activity = await promptExtraActivity(addWorkoutExtraActivity);
+              if (!activity) return; // cancelled or left blank
+              addWorkoutExtraActivity = activity;
+              addWorkoutTags.delete('rest');
+              addWorkoutTags.add('extra');
+            }
           } else if (tag.id === 'rest') {
             addWorkoutTags.clear();
+            addWorkoutExtraActivity = '';
             addWorkoutTags.add('rest');
           } else {
             addWorkoutTags.delete('rest');
-            addWorkoutTags.delete('extra');
             if (addWorkoutTags.has(tag.id)) addWorkoutTags.delete(tag.id);
             else addWorkoutTags.add(tag.id);
           }
@@ -1996,7 +1999,7 @@
         try {
           await api.logWorkout({
             performedOn: addWorkoutDate,
-            type: addWorkoutTags.has('extra') ? addWorkoutExtraActivity : tagsToType([...addWorkoutTags]),
+            type: buildCheckinType([...addWorkoutTags], addWorkoutExtraActivity),
             durationMin: hours * 60 + minutes,
             notes,
             rating: Number(addWorkoutRating.value),
