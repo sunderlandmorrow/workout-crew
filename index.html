@@ -304,6 +304,19 @@
       padding: 8px 10px; font-size: 0.85rem; color: var(--ink); cursor: pointer; border-radius: 4px; white-space: nowrap;
     }
     .row-menu button:hover { background: var(--bg); }
+    .notif-btn {
+      position: relative; border: 1px solid var(--line); background: var(--bg);
+      color: var(--ink); width: 36px; height: 36px; border-radius: 50%;
+      font-size: 1rem; cursor: pointer;
+    }
+    .notif-badge {
+      position: absolute; top: -4px; right: -4px; background: #d64545; color: #fff;
+      font-size: 0.62rem; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    }
+    .notif-popover { min-width: 240px; max-width: 300px; max-height: 320px; overflow-y: auto; }
+    .notif-item { font-size: 0.8rem; padding: 6px 8px; border-radius: 4px; }
+    .notif-item.unread { background: var(--bg); font-weight: 700; }
     .comment-section { flex: 1 0 100%; margin-top: 4px; padding-left: 48px; }
     .comment-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
     .comment-row { display: flex; align-items: flex-start; gap: 8px; }
@@ -641,7 +654,17 @@
               </div>
             </div>
           </div>
-          <button class="link" id="signout">Log out</button>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="row-menu-wrap">
+              <button type="button" class="notif-btn" id="notif-btn" title="Notifications">
+                🔔<span class="notif-badge" id="notif-badge" style="display:none;"></span>
+              </button>
+              <div class="row-menu notif-popover" id="notif-popover">
+                <div id="notif-list"><p class="empty">Nothing yet.</p></div>
+              </div>
+            </div>
+            <button class="link" id="signout">Log out</button>
+          </div>
         </div>
 
         <div class="modal-backdrop" id="settings-modal-backdrop">
@@ -1649,12 +1672,106 @@
         feedInteractions.subscribeAll();
       }
 
+      // ---- in-app notifications: likes/comments on your today's check-ins, new chat ----
+      const notifBtn = document.getElementById('notif-btn');
+      const notifPopover = document.getElementById('notif-popover');
+      const notifBadge = document.getElementById('notif-badge');
+      const notifList = document.getElementById('notif-list');
+      const myUid = api.currentUserId();
+      const notifSeenKey = `wc_notif_seen_${crew.id}`;
+      let notifSeenIds = new Set();
+      try { notifSeenIds = new Set(JSON.parse(localStorage.getItem(notifSeenKey) || '[]')); } catch {}
+      let notifications = []; // { id, text } newest first
+
+      function saveNotifSeen() {
+        try { localStorage.setItem(notifSeenKey, JSON.stringify([...notifSeenIds].slice(-200))); } catch {}
+      }
+      function renderNotifBadge() {
+        const unread = notifications.filter((n) => !notifSeenIds.has(n.id)).length;
+        notifBadge.textContent = unread > 9 ? '9+' : String(unread);
+        notifBadge.style.display = unread ? '' : 'none';
+      }
+      function renderNotifList() {
+        notifList.innerHTML = notifications.length
+          ? notifications.map((n) => `<div class="notif-item${notifSeenIds.has(n.id) ? '' : ' unread'}">${escapeHtml(n.text)}</div>`).join('')
+          : '<p class="empty">Nothing yet.</p>';
+      }
+      function pushNotification(id, text) {
+        if (notifications.some((n) => n.id === id)) return;
+        notifications.unshift({ id, text });
+        if (notifications.length > 30) notifications.length = 30;
+        renderNotifBadge();
+        renderNotifList();
+      }
+      notifBtn.addEventListener('click', () => {
+        const wasOpen = notifPopover.classList.contains('open');
+        document.querySelectorAll('.row-menu.open').forEach((m) => m.classList.remove('open'));
+        notifPopover.classList.toggle('open', !wasOpen);
+        if (!wasOpen) {
+          notifications.forEach((n) => notifSeenIds.add(n.id));
+          saveNotifSeen();
+          renderNotifBadge();
+          renderNotifList();
+        }
+      });
+      renderNotifBadge();
+      renderNotifList();
+
+      // Likes on my own today's check-ins.
+      const prevKudos = new Map(); // workoutId -> Set(uid)
+      function checkKudosNotifications(workouts) {
+        workouts.forEach((w) => {
+          if (!w.isMine) return;
+          const before = prevKudos.get(w.id) ?? new Set();
+          const after = new Set(w.kudos || []);
+          after.forEach((uid) => {
+            if (uid === myUid || before.has(uid)) return;
+            const person = members.find((m) => m.id === uid);
+            pushNotification(`kudos_${w.id}_${uid}`, `${person ? person.displayName : 'Someone'} liked your check-in`);
+          });
+          prevKudos.set(w.id, after);
+        });
+      }
+
+      // Comments on my own today's check-ins.
+      const notifCommentUnsubs = new Map(); // workoutId -> unsub
+      const knownCommentIds = new Map(); // workoutId -> Set(commentId)
+      function syncCommentNotifications(workouts) {
+        const mineIds = new Set(workouts.filter((w) => w.isMine).map((w) => w.id));
+        notifCommentUnsubs.forEach((unsub, workoutId) => {
+          if (mineIds.has(workoutId)) return;
+          unsub();
+          notifCommentUnsubs.delete(workoutId);
+          knownCommentIds.delete(workoutId);
+        });
+        mineIds.forEach((workoutId) => {
+          if (notifCommentUnsubs.has(workoutId)) return;
+          const unsub = api.watchComments(workoutId, crew.id, (comments) => {
+            const known = knownCommentIds.get(workoutId) ?? new Set();
+            comments.forEach((c) => {
+              if (known.has(c.id) || c.userId === myUid || c.pending) return;
+              known.add(c.id);
+              pushNotification(`comment_${c.id}`, `${c.displayName} commented: ${c.text}`);
+            });
+            knownCommentIds.set(workoutId, known);
+          });
+          notifCommentUnsubs.set(workoutId, unsub);
+        });
+      }
+      cleanup.push(() => notifCommentUnsubs.forEach((unsub) => unsub()));
+
+      // New chat messages (skips the initial history load so it doesn't spam
+      // a notification per message the first time the dashboard opens).
+      let knownChatIds = null;
+
       const unwatchMembers = api.watchFullRoster(crew.id, (m) => { members = m; renderFeed(); });
       const unwatchFeed = api.watchFeed((workouts) => {
         const today = api.today();
         todaysWorkouts = workouts.filter((w) => w.performedOn === today);
         renderFeed();
         loadRankings();
+        checkKudosNotifications(todaysWorkouts);
+        syncCommentNotifications(todaysWorkouts);
       }, { crewId: crew.id, pageSize: 50 });
       cleanup.push(unwatchMembers, unwatchFeed);
 
@@ -1693,6 +1810,17 @@
       }
 
       const unwatchChat = api.watchChat(crew.id, (messages) => {
+        if (knownChatIds === null) {
+          knownChatIds = new Set(messages.map((m) => m.id));
+        } else {
+          messages.forEach((m) => {
+            if (knownChatIds.has(m.id) || m.pending) return;
+            knownChatIds.add(m.id);
+            if (m.userId !== myUid) {
+              pushNotification(`chat_${m.id}`, `${m.displayName}: ${m.text || '📷 Photo'}`);
+            }
+          });
+        }
         chatMessages = messages;
         renderChatList();
       }, (err) => { chatError.textContent = err.message; });
