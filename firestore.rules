@@ -260,6 +260,28 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------- comments (on a single workout doc, already crew-scoped) ----------
+    function validComment(d) {
+      return d.keys().hasOnly(['userId', 'crewId', 'workoutId', 'displayName', 'color', 'avatarUrl', 'text', 'createdAt'])
+        && d.keys().hasAll(['userId', 'crewId', 'workoutId', 'displayName', 'color', 'text', 'createdAt'])
+        && d.userId == request.auth.uid
+        && isInCrew(d.crewId)
+        && d.workoutId is string && d.workoutId.size() <= 200
+        && exists(/databases/$(database)/documents/workouts/$(d.workoutId))
+        && get(/databases/$(database)/documents/workouts/$(d.workoutId)).data.crewId == d.crewId
+        && validName(d.displayName)
+        && validColor(d.color)
+        && validNullableAvatarUrl(d.get('avatarUrl', null))
+        && d.text is string && d.text.size() >= 1 && d.text.size() <= 2000
+        && d.createdAt == request.time;
+    }
+
+    match /comments/{commentId} {
+      allow read: if isMember() && isInCrew(resource.data.crewId);
+      allow create: if isMember() && validComment(request.resource.data);
+      allow update, delete: if false;
+    }
+
     // ---------- monthly weigh-ins (one per person per month, doc id = uid_YYYY-MM) ----------
     function validWeight(d) {
       return d.keys().hasOnly(['userId', 'crewId', 'month', 'weight', 'photoUrl', 'createdAt'])

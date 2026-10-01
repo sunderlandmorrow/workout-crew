@@ -35,6 +35,7 @@ const membersCol = collection(db, 'members');
 const crewLinksCol = collection(db, 'crewLinks');
 const workoutsCol = collection(db, 'workouts');
 const messagesCol = collection(db, 'messages');
+const commentsCol = collection(db, 'comments');
 const weightsCol = collection(db, 'weights');
 const STREAK_HISTORY_DAYS = 90; // streaks longer than this show as 90
 
@@ -115,6 +116,21 @@ function toMessage(snap) {
     avatarUrl: d.avatarUrl ?? null,
     text: d.text,
     imageUrl: d.imageUrl ?? null,
+    createdAt: d.createdAt?.toDate() ?? null,
+    pending: snap.metadata.hasPendingWrites,
+  };
+}
+
+function toComment(snap) {
+  const d = snap.data();
+  return {
+    id: snap.id,
+    userId: d.userId,
+    workoutId: d.workoutId,
+    displayName: d.displayName,
+    color: d.color ?? null,
+    avatarUrl: d.avatarUrl ?? null,
+    text: d.text,
     createdAt: d.createdAt?.toDate() ?? null,
     pending: snap.metadata.hasPendingWrites,
   };
@@ -447,6 +463,33 @@ export const api = {
     const user = requireUser();
     await updateDoc(doc(workoutsCol, id), { kudos: arrayRemove(user.uid) });
   }),
+
+  // ---- comments (on a single workout doc, so already crew-scoped) ----
+
+  sendComment: wrap(async (workoutId, crewId, text) => {
+    const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join the crew first');
+    const msg = v.chatMessage(text);
+    await addDoc(commentsCol, {
+      userId: user.uid,
+      crewId,
+      workoutId,
+      displayName: member.displayName,
+      color: member.color,
+      avatarUrl: member.avatarUrl ?? null,
+      text: msg,
+      createdAt: serverTimestamp(),
+    });
+  }),
+
+  /** Live comment thread for one workout, oldest first. Returns an unsubscribe function. */
+  watchComments(workoutId, callback, onError) {
+    return onSnapshot(
+      query(commentsCol, where('workoutId', '==', workoutId), orderBy('createdAt', 'asc'), limit(500)),
+      (snap) => callback(snap.docs.map(toComment)),
+      (err) => onError?.(friendly(err)));
+  },
 
   // ---- chat ----
 
