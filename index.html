@@ -256,18 +256,9 @@
     .tabs-wrap.can-scroll-left::before { opacity: 1; }
     .tabs-wrap.can-scroll-right::after { opacity: 1; }
 
-    .crew-switcher { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
-    .crew-switch-btn {
-      border: 1px solid var(--line);
-      background: none;
-      color: var(--muted);
-      padding: 5px 12px;
-      font-size: 0.7rem;
-      letter-spacing: 0.04em;
-      border-radius: 12px;
-      cursor: pointer;
-    }
-    .crew-switch-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .active-crew-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .active-crew-row label { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.04em; }
+    .active-crew-row select { font-size: 0.8rem; padding: 3px 6px; width: auto; }
 
     /* ---- today's check-ins ---- */
     .feed-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
@@ -642,7 +633,13 @@
               </div>
             </div>
             <input type="file" id="profile-avatar-input" accept="image/*" style="display:none;">
-            <div>Logged in as <strong>${escapeHtml(member.displayName)}</strong> <span class="points" id="my-points"></span></div>
+            <div>
+              <div>Logged in as <strong>${escapeHtml(member.displayName)}</strong> <span class="points" id="my-points"></span></div>
+              <div class="active-crew-row" id="active-crew-row" style="display:none;">
+                <label class="caps" for="active-crew-select">Active Crew:</label>
+                <select id="active-crew-select"></select>
+              </div>
+            </div>
           </div>
           <button class="link" id="signout">Log out</button>
         </div>
@@ -913,7 +910,17 @@
 
       document.getElementById('signout').addEventListener('click', () => api.logout());
 
-      // ---- crews you're in (home + linked) -- used by the "Post to" picker ----
+      // ---- crews you're in (home + linked) -- "Active Crew" picker + "Post to" picker ----
+      function switchToCrew(targetCrew) {
+        teardown();
+        renderDashboard(member, targetCrew);
+      }
+      const activeCrewRow = document.getElementById('active-crew-row');
+      const activeCrewSelect = document.getElementById('active-crew-select');
+      activeCrewSelect.addEventListener('change', () => {
+        const target = myCrews.find((c) => c.id === activeCrewSelect.value);
+        if (target && target.id !== crew.id) switchToCrew(target);
+      });
       async function loadMyCrews() {
         // myCrewLinks() never includes the home crew, but `crew` (the currently
         // active one) might BE a linked crew, not home -- always resolve the true
@@ -924,6 +931,14 @@
           api.myCrewLinks(),
         ]);
         myCrews = [homeCrew, ...links];
+        if (myCrews.length > 1) {
+          activeCrewRow.style.display = '';
+          activeCrewSelect.innerHTML = myCrews.map((c) => `
+            <option value="${escapeHtml(c.id)}" ${c.id === crew.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+          `).join('');
+        } else {
+          activeCrewRow.style.display = 'none';
+        }
         renderPostToSelector();
       }
       loadMyCrews();
