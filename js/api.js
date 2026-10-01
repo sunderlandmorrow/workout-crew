@@ -533,9 +533,15 @@ export const api = {
   }),
 
   /** Live comment thread for one workout, oldest first. Returns an unsubscribe function. */
-  watchComments(workoutId, callback, onError) {
+  /** crewId must be passed (not just workoutId) -- Firestore rejects a list
+   *  query outright unless every field the security rule reads is also one of
+   *  the query's own filters, and validComment's read rule checks crewId. */
+  watchComments(workoutId, crewId, callback, onError) {
     return onSnapshot(
-      query(commentsCol, where('workoutId', '==', workoutId), orderBy('createdAt', 'asc'), limit(500)),
+      query(commentsCol,
+        where('workoutId', '==', workoutId),
+        where('crewId', '==', crewId),
+        orderBy('createdAt', 'asc'), limit(500)),
       (snap) => callback(snap.docs.map(toComment)),
       (err) => onError?.(friendly(err)));
   },

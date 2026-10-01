@@ -46,6 +46,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "workoutId", "order": "ASCENDING" },
+        { "fieldPath": "crewId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     }

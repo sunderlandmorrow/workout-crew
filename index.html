@@ -1445,7 +1445,7 @@
       }
 
       // Shared by today's feed and the calendar's day-detail view.
-      function feedRowHtml(w, byId) {
+      function feedRowHtml(w, byId, { showMenu = true } = {}) {
         const person = byId[w.userId];
         const name = w.displayName || (person ? person.displayName : 'Someone');
         const { label } = parseType(w.type);
@@ -1468,7 +1468,7 @@
             <div class="feed-actions">
               <button type="button" class="kudos-btn${w.kudoedByMe ? ' active' : ''}" data-action="kudos">👍 <span class="kudos-count">${w.kudosCount || ''}</span></button>
               <button type="button" class="comment-toggle-btn" data-action="toggle-comments">💬 Comment</button>
-              ${w.isMine ? `
+              ${w.isMine && showMenu ? `
                 <div class="row-menu-wrap">
                   <button type="button" class="row-menu-btn" data-action="toggle-menu">⋯</button>
                   <div class="row-menu">
@@ -1517,7 +1517,7 @@
         function subscribe(workoutId, row) {
           if (unsubs.has(workoutId)) return;
           const listEl = row.querySelector('.comment-list');
-          const unsub = api.watchComments(workoutId, (comments) => {
+          const unsub = api.watchComments(workoutId, crew.id, (comments) => {
             listEl.innerHTML = comments.length
               ? comments.map(commentRowHtml).join('')
               : '<p class="empty">No comments yet.</p>';
@@ -1649,7 +1649,7 @@
           list.innerHTML = '<p class="empty">No check-ins yet today.</p>';
           return;
         }
-        list.innerHTML = todaysWorkouts.map((w) => feedRowHtml(w, byId)).join('');
+        list.innerHTML = todaysWorkouts.map((w) => feedRowHtml(w, byId, { showMenu: false })).join('');
         feedInteractions.reopen();
       }
 
