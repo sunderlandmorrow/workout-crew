@@ -139,17 +139,25 @@ service cloud.firestore {
       return isMember()
         && d.uid == request.auth.uid
         && linkId == d.uid + '_' + d.crewId
-        && d.keys().hasOnly(['uid', 'crewId', 'inviteCode', 'joinedAt'])
+        && d.keys().hasOnly(['uid', 'crewId', 'inviteCode', 'joinedAt', 'displayName', 'color', 'avatarUrl'])
+        && d.keys().hasAll(['uid', 'crewId', 'inviteCode', 'joinedAt', 'displayName', 'color'])
         && validCode(d.inviteCode)
         && codeExists(d.inviteCode)
         && d.crewId == crewIdOfCode(d.inviteCode)
         && exists(/databases/$(database)/documents/crews/$(d.crewId))
         && d.crewId != myCrewId()
-        && d.joinedAt == request.time;
+        && d.joinedAt == request.time
+        && validName(d.displayName)
+        && validColor(d.color)
+        && validNullableAvatarUrl(d.get('avatarUrl', null));
     }
 
+    // Readable by its own owner (so Settings can list "also posting to") OR by
+    // anyone already in that crew (home or linked) -- same non-sensitive
+    // treatment as members/memberNames, needed so a crew's roster/counts can
+    // include people who've only linked into it, not just home members.
     match /crewLinks/{linkId} {
-      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || (isMember() && isInCrew(resource.data.crewId)));
       allow create: if validNewCrewLink(linkId);
       allow update, delete: if false;
     }

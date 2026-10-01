@@ -1638,7 +1638,7 @@
         feedInteractions.reopen();
       }
 
-      const unwatchMembers = api.watchMembers(crew.id, (m) => { members = m; renderFeed(); });
+      const unwatchMembers = api.watchFullRoster(crew.id, (m) => { members = m; renderFeed(); });
       const unwatchFeed = api.watchFeed((workouts) => {
         const today = api.today();
         todaysWorkouts = workouts.filter((w) => w.performedOn === today);

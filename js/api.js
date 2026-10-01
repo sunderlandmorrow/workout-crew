@@ -271,11 +271,19 @@ export const api = {
    *  Doesn't change your home crew (chat/weigh-ins/brand stay put) -- see myCrewLinks(). */
   joinAdditionalCrew: wrap(async (groupCode) => {
     const user = requireUser();
+    const member = await api.me();
+    if (!member) throw new Error('Join a crew first');
     const code = v.inviteCode(groupCode);
     const crewId = v.crewIdFromInviteCode(code);
     try {
       await setDoc(doc(crewLinksCol, `${user.uid}_${crewId}`), {
-        uid: user.uid, crewId, inviteCode: code, joinedAt: serverTimestamp(),
+        uid: user.uid,
+        crewId,
+        inviteCode: code,
+        joinedAt: serverTimestamp(),
+        displayName: member.displayName,
+        color: member.color,
+        avatarUrl: member.avatarUrl ?? null,
       });
     } catch (err) {
       if (err.code === 'permission-denied') throw new v.ValidationError("Wrong code, or you're already in that crew");
@@ -314,14 +322,21 @@ export const api = {
    *  (e.g. on dashboard load) to keep allCrews()'s numbers from drifting. */
   refreshCrewStats: wrap(async (crewId) => {
     requireUser();
-    const [membersSnap, workoutsSnap] = await Promise.all([
+    const [membersSnap, linksSnap, workoutsSnap] = await Promise.all([
       getDocs(query(membersCol, where('crewId', '==', crewId), orderBy('displayName'))),
+      getDocs(query(crewLinksCol, where('crewId', '==', crewId))),
       getDocs(query(workoutsCol, where('crewId', '==', crewId))),
     ]);
     const workouts = workoutsSnap.docs.map((d) => d.data());
+    // Include linked (cross-posting) members too, not just the home roster --
+    // their workouts/weigh-ins already fan out into this crew.
+    const names = [
+      ...membersSnap.docs.map((d) => d.data().displayName),
+      ...linksSnap.docs.map((d) => d.data().displayName),
+    ].sort((a, b) => a.localeCompare(b));
     await updateDoc(doc(crewsCol, crewId), {
-      memberCount: membersSnap.size,
-      memberNames: membersSnap.docs.map((d) => d.data().displayName),
+      memberCount: membersSnap.size + linksSnap.size,
+      memberNames: names,
       totalPoints: totalPoints(workouts),
     });
   }),
@@ -380,6 +395,40 @@ export const api = {
     return onSnapshot(query(membersCol, where('crewId', '==', crewId), orderBy('displayName')),
       (snap) => callback(snap.docs.map(toMember)),
       (err) => onError?.(friendly(err)));
+  },
+
+  /** Like watchMembers(), but also includes people who've only linked into this
+   *  crew (joinAdditionalCrew), not just its home roster -- a cross-posting
+   *  member still shows up in "who's in this crew"/checked-in counts, same as
+   *  their workouts/weigh-ins already fan out into it. Returns an unsubscribe. */
+  watchFullRoster(crewId, callback, onError) {
+    let homeMembers = null;
+    let linkedMembers = null;
+    const emit = () => {
+      if (homeMembers === null || linkedMembers === null) return;
+      callback([...homeMembers, ...linkedMembers].sort((a, b) => a.displayName.localeCompare(b.displayName)));
+    };
+    const unwatchHome = onSnapshot(query(membersCol, where('crewId', '==', crewId), orderBy('displayName')),
+      (snap) => { homeMembers = snap.docs.map(toMember); emit(); },
+      (err) => onError?.(friendly(err)));
+    const unwatchLinked = onSnapshot(query(crewLinksCol, where('crewId', '==', crewId)),
+      (snap) => {
+        linkedMembers = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: data.uid,
+            crewId,
+            displayName: data.displayName || 'Someone', // older links predate denormalized displayName
+            color: data.color ?? null,
+            avatarUrl: data.avatarUrl ?? null,
+            liftMode: 'open',
+            joinedAt: data.joinedAt?.toDate() ?? null,
+          };
+        });
+        emit();
+      },
+      (err) => onError?.(friendly(err)));
+    return () => { unwatchHome(); unwatchLinked(); };
   },
 
   // ---- workouts ----
