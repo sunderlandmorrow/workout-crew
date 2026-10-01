@@ -1518,9 +1518,7 @@
           if (unsubs.has(workoutId)) return;
           const listEl = row.querySelector('.comment-list');
           const unsub = api.watchComments(workoutId, crew.id, (comments) => {
-            listEl.innerHTML = comments.length
-              ? comments.map(commentRowHtml).join('')
-              : '<p class="empty">No comments yet.</p>';
+            listEl.innerHTML = comments.map(commentRowHtml).join('');
           }, (err) => { listEl.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`; });
           unsubs.set(workoutId, unsub);
         }
